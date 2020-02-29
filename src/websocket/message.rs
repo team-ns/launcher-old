@@ -1,24 +1,12 @@
 use crate::websocket::WsApiSession;
 use actix_web_actors::ws;
 use actix_web_actors::ws::WebsocketContext;
-use serde::{Deserialize, Serialize};
-use crate::websocket::message::Message::Auth;
+use launcher_api::message::Message::Auth;
+use launcher_api::message::{AuthMessage, Message};
 
 type Context = ws::WebsocketContext<WsApiSession>;
 
-#[derive(Deserialize, Serialize)]
-pub enum Message {
-    Auth(AuthMessage),
-    Profiles(ProfilesMessage)
-}
-#[derive(Deserialize, Serialize)]
-pub struct AuthMessage {
 
-}
-#[derive(Deserialize, Serialize)]
-pub struct ProfilesMessage {
-
-}
 trait Handle {
     fn handle(&self, client: &mut WsApiSession, ctx: &mut Context);
 }
@@ -28,11 +16,10 @@ impl Handle for AuthMessage {
         ctx.text("Auth".to_string());
     }
 }
- impl Message {
-    pub fn handle(&self, client: &mut WsApiSession, ctx: &mut Context) {
-        match self {
-            Auth(message) => {message.handle(client, ctx)}
-            _ => {}
-        }
+
+pub fn handle(message: Message, client: &mut WsApiSession, ctx: &mut Context) {
+    match message {
+        Auth(message) => { message.handle(client, ctx) }
+        _ => {}
     }
 }

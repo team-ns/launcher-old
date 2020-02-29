@@ -56,9 +56,9 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsApiSession {
                 self.hb = Instant::now();
             }
             Ok(ws::Message::Text(text)) => {
-                let mes: Result<message::Message, serde_json::error::Error> = serde_json::from_str(&text);
+                let mes: Result<launcher_api::message::Message, serde_json::error::Error> = serde_json::from_str(&text);
                 match mes {
-                    Ok(m) => {m.handle(self, ctx)},
+                    Ok(m) => {message::handle(m, self, ctx)},
                     Err(e) => {println!("Error: {}", e)}
                 }
             },
@@ -99,7 +99,6 @@ impl WsApiSession {
 }
 
 pub async fn start(config: &Config) -> std::io::Result<()>{
-    println!("Launch server starting...");
     HttpServer::new(move || {
         App::new()
             // websocket
