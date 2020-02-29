@@ -1,0 +1,16 @@
+[package]
+name = "nslauncher"
+version = "0.1.0"
+authors = ["belz, jeb"]
+edition = "2018"
+
+[dependencies]
+dlopen = "0.1.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+walkdir = "2"
+jni = { git = "https://gitlab.com/nsl_team/jni-rs" }
+
+[profile.release]
+opt-level = 'z'
+lto = true
