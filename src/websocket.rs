@@ -4,6 +4,8 @@ use actix_files as fs;
 use actix_web_actors::ws;
 use std::time::{Instant, Duration};
 use crate::config::Config;
+use crate::websocket::message::Handle;
+
 mod message;
 
 /// How often heartbeat pings are sent
@@ -58,7 +60,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsApiSession {
             Ok(ws::Message::Text(text)) => {
                 let mes: Result<launcher_api::message::Message, serde_json::error::Error> = serde_json::from_str(&text);
                 match mes {
-                    Ok(m) => {message::handle(m, self, ctx)},
+                    Ok(m) => {m.handle( self, ctx)},
                     Err(e) => {println!("Error: {}", e)}
                 }
             },

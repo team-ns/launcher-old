@@ -7,7 +7,7 @@ use launcher_api::message::{AuthMessage, Message};
 type Context = ws::WebsocketContext<WsApiSession>;
 
 
-trait Handle {
+pub trait Handle {
     fn handle(&self, client: &mut WsApiSession, ctx: &mut Context);
 }
 
@@ -17,9 +17,11 @@ impl Handle for AuthMessage {
     }
 }
 
-pub fn handle(message: Message, client: &mut WsApiSession, ctx: &mut Context) {
-    match message {
-        Auth(message) => { message.handle(client, ctx) }
-        _ => {}
+impl Handle for Message {
+    fn handle(&self, client: &mut WsApiSession, ctx: &mut Context) {
+        match self {
+            Auth(message) => { message.handle(client, ctx) }
+            _ => {}
+        }
     }
 }
