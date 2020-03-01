@@ -7,7 +7,8 @@ pub enum Message {
 }
 #[derive(Deserialize, Serialize)]
 pub struct AuthMessage {
-
+    pub login: String,
+    pub password: String,
 }
 #[derive(Deserialize, Serialize)]
 pub struct ProfilesMessage {
