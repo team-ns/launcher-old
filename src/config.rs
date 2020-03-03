@@ -1,8 +1,14 @@
 use std::path::Path;
 use std::fs::File;
 use serde::{Deserialize, Serialize};
+use crate::config::AuthProvider::{Empty, JSON};
+use crate::config::auth::{AuthProvide};
+use std::clone::Clone;
 
-pub fn get_config() ->  std::io::Result<Config> {
+pub(crate) mod auth;
+mod texture;
+
+pub fn get_config() -> std::io::Result<Config> {
     let config_path = Path::new("config.json");
     let config_file = {
         if config_path.exists() {
@@ -19,14 +25,49 @@ pub fn get_config() ->  std::io::Result<Config> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Config {
     pub address: String,
     pub port: u32,
+    pub auth: AuthProvider,
+    pub texture: TextureProvider,
+    pub workers: usize,
 }
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TextureProvider {
+     skin_url: String,
+     cape_url: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub enum AuthProvider {
+    Empty,
+    JSON(JsonAuthProvider),
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct JsonAuthProvider {
+    pub auth_url: String,
+    pub entry_url: String,
+    pub update_server_id_url: String,
+    pub update_access_token_url: String,
+}
+
 
 impl Default for Config {
     fn default() -> Self {
-        Config { address: "127.0.0.1".to_string(), port: 8080 }
+        Config { workers: 3, address: "127.0.0.1".to_string(), port: 8080, auth: Empty, texture: TextureProvider {skin_url: "http://example.com/skin/{}.png".to_string(), cape_url: "http://example.com/cape/{}.png".to_string()} }
+    }
+}
+pub struct None;
+impl AuthProvider {
+    pub fn get_provide<'a> (&'a self) -> Box<dyn AuthProvide> {
+        match self.clone() {
+            Empty => { Box::new(None {}) }
+            JSON(auth) => { Box::new(auth) }
+        }
     }
 }

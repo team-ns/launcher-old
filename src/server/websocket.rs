@@ -1,37 +1,49 @@
-use actix_web::{App, HttpServer, HttpResponse, web, HttpRequest, Error};
-use actix::*;
-use actix_files as fs;
-use actix_web_actors::ws;
-use std::time::{Instant, Duration};
-use crate::config::Config;
-use crate::websocket::message::Handle;
+use std::time::{Duration, Instant};
 
-mod message;
+use actix::{Actor, ActorContext, AsyncContext, StreamHandler};
+use actix_web::{Error, HttpRequest, HttpResponse, web};
+use actix_web_actors::ws;
+
+use crate::config::Config;
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 /// How long before lack of client response causes a timeout
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
-async fn api_route(
+pub async fn api_route(
     req: HttpRequest,
+    data: web::Data<Config>,
     stream: web::Payload,
 ) -> Result<HttpResponse, Error> {
-    ws::start(
-        WsApiSession {
-            hb: Instant::now(),
-        },
-        &req,
-        stream,
-    )
+    let address = req.peer_addr();
+    if address.is_none() {
+        HttpResponse::BadRequest().await
+    } else {
+        ws::start(
+            WsApiSession {
+                hb: Instant::now(),
+                config: data.get_ref().clone(),
+                ip: address.unwrap().ip().to_string(),
+
+            },
+            &req,
+            stream,
+        )
+    }
 }
-/// websocket connection is long running connection, it easier
+
+
+/// server connection is long running connection, it easier
 /// to handle with an actor
 pub struct WsApiSession {
     /// Client must send ping at least once per 10 seconds (CLIENT_TIMEOUT),
     /// otherwise we drop connection.
     hb: Instant,
+    pub config: Config,
+    pub ip: String,
 }
+
 impl Actor for WsApiSession {
     type Context = ws::WebsocketContext<Self>;
 
@@ -47,7 +59,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsApiSession {
         msg: Result<ws::Message, ws::ProtocolError>,
         ctx: &mut Self::Context,
     ) {
-        // process websocket messages
+        // process server messages
         println!("WS: {:?}", msg);
         match msg {
             Ok(ws::Message::Ping(msg)) => {
@@ -59,11 +71,12 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsApiSession {
             }
             Ok(ws::Message::Text(text)) => {
                 let mes: Result<launcher_api::message::Message, serde_json::error::Error> = serde_json::from_str(&text);
+
                 match mes {
-                    Ok(m) => {m.handle( self, ctx)},
-                    Err(e) => {println!("Error: {}", e)}
+                    Ok(m) => { ctx.address().do_send(m) }
+                    Err(e) => { println!("Error: {}", e) }
                 }
-            },
+            }
             Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
             Ok(ws::Message::Close(_)) => {
                 ctx.stop();
@@ -74,10 +87,6 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsApiSession {
 }
 
 impl WsApiSession {
-    fn new() -> Self {
-        Self { hb: Instant::now() }
-    }
-
     /// helper method that sends ping to client every second.
     ///
     /// also this method checks heartbeats from client
@@ -98,21 +107,4 @@ impl WsApiSession {
             ctx.ping(b"");
         });
     }
-}
-
-pub async fn start(config: &Config) -> std::io::Result<()>{
-    HttpServer::new(move || {
-        App::new()
-            // websocket
-            .service(web::resource("/api/").to(api_route))
-            // static resources
-            .service(
-                fs::Files::new("/static/", "static/")
-                .show_files_listing()
-                .use_last_modified(true)
-            )
-    })
-        .bind(format!("{}:{}", config.address, config.port))?
-        .run()
-        .await
 }
