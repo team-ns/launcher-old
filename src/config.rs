@@ -1,27 +1,28 @@
 use std::path::Path;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use serde::{Deserialize, Serialize};
 use crate::config::AuthProvider::{Empty, JSON};
 use crate::config::auth::{AuthProvide};
 use std::clone::Clone;
+use std::io::Write;
 
 pub(crate) mod auth;
 mod texture;
 
 pub fn get_config() -> std::io::Result<Config> {
     let config_path = Path::new("config.json");
-    let config_file = {
-        if config_path.exists() {
-            File::open(config_path)?
-        } else {
-            let file = File::create(config_path)?;
-            serde_json::to_writer_pretty(&file, &Config::default())?;
-            file
-        }
-    };
+    let config_file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .read(true)
+        .open(config_path)?;
     match serde_json::from_reader(&config_file) {
         Ok(config) => Ok(config),
-        Err(e) => Err(std::io::Error::from(e)),
+        Err(e) => {
+            let config = Config::default();
+            serde_json::to_writer_pretty(&config_file, &config)?;
+            Ok(config)
+        },
     }
 }
 

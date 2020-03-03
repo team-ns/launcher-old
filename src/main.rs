@@ -1,5 +1,6 @@
 mod server;
 mod config;
+
 use log::info;
 use env_logger::Env;
 
