@@ -1,8 +1,8 @@
+use env_logger::Env;
+use log::info;
+
 mod server;
 mod config;
-
-use log::info;
-use env_logger::Env;
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
