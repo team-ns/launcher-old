@@ -12,6 +12,7 @@ pub enum ClientMessage {
 #[rtype(result = "()")]
 pub enum ServerMessage {
     Auth(AuthResponse),
+    Error(Error)
 }
 
 #[derive(Deserialize, Serialize, Msg)]
@@ -33,4 +34,8 @@ pub struct ProfilesMessage {
 pub struct AuthResponse {
     pub uuid: String,
     pub access_token: String,
+}
+
+pub struct Error {
+    pub msg: String,
 }
