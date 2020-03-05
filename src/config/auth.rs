@@ -9,9 +9,10 @@ use async_trait::async_trait;
 use crate::config::{JsonAuthProvider, None};
 
 #[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Entry {
-    pub access_token: String,
-    pub server_id: String,
+    pub access_token: Option<String>,
+    pub server_id: Option<String>,
     pub uuid: Uuid,
     pub username: String,
 }
@@ -88,7 +89,7 @@ impl AuthProvide for JsonAuthProvider {
             .send_json(&serde_json::json!({
                 "uuid": uuid,
                 "accessToken": token
-            }));
+            })).await;
     }
 
     async fn update_server_id(&self, uuid: &Uuid, server_id: &String) {
@@ -97,7 +98,7 @@ impl AuthProvide for JsonAuthProvider {
             .send_json(&serde_json::json!({
             "uuid": uuid,
             "serverId": server_id
-            }));
+            })).await;
     }
 }
 

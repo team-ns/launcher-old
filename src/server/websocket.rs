@@ -70,7 +70,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsApiSession {
                 self.hb = Instant::now();
             }
             Ok(ws::Message::Text(text)) => {
-                let mes: Result<launcher_api::message::Message, serde_json::error::Error> = serde_json::from_str(&text);
+                let mes: Result<launcher_api::message::ClientMessage, serde_json::error::Error> = serde_json::from_str(&text);
 
                 match mes {
                     Ok(m) => { ctx.address().do_send(m) }

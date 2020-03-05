@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::time::Instant;
+use std::time::{Instant, Duration};
 
 use serde_json::Value;
 use strfmt::Format;
@@ -24,8 +24,7 @@ impl TextureProvider {
     }
 
     pub fn get_textures_property(&self, entry: &Entry) -> Value {
-        let start = Instant::now();
-        let timestamp = start.elapsed().as_millis();
+        let timestamp = 0;
         serde_json::json!({
             "timestamp": timestamp,
             "profileId": entry.uuid.to_simple().encode_lower(&mut Uuid::encode_buffer()),

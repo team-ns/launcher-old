@@ -1,16 +1,24 @@
-use actix::{AsyncContext, Handler};
-use launcher_api::message::{AuthMessage, Message};
-use launcher_api::message::Message::Auth;
+use actix::{AsyncContext, Handler, WrapFuture, ContextFutureSpawner};
+use launcher_api::message::{AuthMessage, ClientMessage, ServerMessage, AuthResponse};
+use launcher_api::message::ClientMessage::Auth;
 
 use crate::config::auth::{AuthResult, Error};
 use crate::server::websocket::WsApiSession;
+use rand::Rng;
+use actix::fut::wrap_future;
+use futures::TryFutureExt;
 
 impl Handler<AuthResult> for WsApiSession {
     type Result = ();
-    //TODO: Add generating access token and send it with UUID
     fn handle(&mut self, msg: AuthResult, ctx: &mut Self::Context) -> Self::Result {
         if msg.message.is_none() {
-            ctx.text("You auth".to_string());
+            let mut rng = rand::thread_rng();
+            let digest = md5::compute(format!("{}{}{}", rng.gen_range(1000000000, 2147483647), rng.gen_range(1000000000, 2147483647), rng.gen_range(0, 9)));
+            let access_token = format!("{:x}", digest);
+            let auth = self.config.auth.get_provide();
+            let uuid = msg.uuid.unwrap();
+            ctx.text(serde_json::to_string(&ServerMessage::Auth(AuthResponse { uuid: uuid.to_string(), access_token: access_token.to_string() })).unwrap());
+            ctx.spawn(actix::fut::wrap_future(async move { auth.update_access_token(&uuid, &access_token.clone()).await; }));
         } else {
             ctx.text(format!("Error: {}", msg.message.unwrap()));
         }
@@ -21,7 +29,7 @@ impl Handler<Error> for WsApiSession {
     type Result = ();
 
     fn handle(&mut self, msg: Error, ctx: &mut Self::Context) -> Self::Result {
-       ctx.text(format!("Error: {}", msg.message));
+        ctx.text(format!("Error: {}", msg.message));
     }
 }
 
@@ -47,10 +55,10 @@ impl Handler<AuthMessage> for WsApiSession {
     }
 }
 
-impl Handler<Message> for WsApiSession {
+impl Handler<ClientMessage> for WsApiSession {
     type Result = ();
 
-    fn handle(&mut self, msg: Message, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: ClientMessage, ctx: &mut Self::Context) -> Self::Result {
         match msg {
             Auth(message) => {
                 ctx.address().do_send(message);

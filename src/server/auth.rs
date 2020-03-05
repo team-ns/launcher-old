@@ -1,6 +1,7 @@
 use actix_web::{HttpResponse, web};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use log::debug;
 
 use crate::config::Config;
 
@@ -25,8 +26,8 @@ pub(crate) async fn join(data: web::Data<Config>, request: web::Json<JoinRequest
     let entry = provide.get_entry(&request.selected_profile).await;
     match entry {
         Ok(e) => {
-            if e.access_token.eq(&request.access_token) {
-                provide.update_server_id(&request.selected_profile, &request.server_id);
+            if e.access_token.is_some() && e.access_token.unwrap().eq(&request.access_token) {
+                provide.update_server_id(&request.selected_profile, &request.server_id).await;
                 HttpResponse::Ok().finish()
             } else {
                 HttpResponse::Ok().json(serde_json::json!({
@@ -35,9 +36,9 @@ pub(crate) async fn join(data: web::Data<Config>, request: web::Json<JoinRequest
             }))
             }
         }
-        Err(_error) => {
+        Err(error) => {
             HttpResponse::Ok().json(serde_json::json!({
-                 "error": "Entry error",
+                 "error": error.message,
                  "errorMessage": "Подробное описание, ОТОБРАЖАЕМОЕ В КЛИЕНТЕ!",
                  "cause": "Причина ошибки (опционально)"
             }))
@@ -52,10 +53,10 @@ pub(crate) async fn has_join(data: web::Data<Config>, form: web::Query<HasJoinRe
     match entry {
         Err(_e) => HttpResponse::Ok().finish(),
         Ok(e) => {
-            if e.server_id.eq(&form.server_id) {
+            if e.server_id.is_some() && e.server_id.clone().unwrap().eq(&form.server_id) {
                 let texture = base64::encode(&texture.get_textures_property(&e).to_string()).to_string();
                 HttpResponse::Ok().json(serde_json::json!({
-                    "id": e.uuid.to_simple().encode_lower(&mut Uuid::encode_buffer()),
+                    "id":  e.uuid.to_simple().encode_lower(&mut Uuid::encode_buffer()),
                     "name": form.username,
                     "properties": [
                         {
