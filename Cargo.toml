@@ -9,7 +9,9 @@ dlopen = "0.1.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 walkdir = "2"
+path-slash = "0.1.1"
 jni = { git = "https://gitlab.com/nsl_team/jni-rs" }
+launcher_api = {git = "https://gitlab.com/nsl_team/launcherapi"}
 
 [profile.release]
 opt-level = 'z'

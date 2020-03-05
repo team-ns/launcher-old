@@ -1,43 +1,75 @@
 use std::fs::File;
-use std::io::{Result, Error};
-use serde::{Serialize, Deserialize};
 use jni::objects::{JValue, JObject};
 use jni::JNIEnv;
+use launcher_api::profile::Profile;
+use std::path::{Path, PathBuf};
+use path_slash::PathExt;
 
-#[derive(Serialize, Deserialize)]
-pub struct Profile {
-    name: String,
-    libraries: Vec<String>,
-    main: String,
-    assets: String,
+#[cfg(not(target_os = "windows"))]
+const CLASS_PATH_SEPARATOR: &str = ":";
+#[cfg(target_os = "windows")]
+const CLASS_PATH_SEPARATOR: &str = ";";
+
+pub trait ClientProfile {
+    fn new(path: &str) -> Self;
+    fn create_lib_string(&self, dir: &str) -> String;
+    fn get_native_option(&self, dir: &str) -> String;
+    fn create_args(&self, dir: &str, env: &JNIEnv) -> JValue;
+    fn get_client_dir(&self, dir: &str) -> PathBuf;
 }
 
-impl Profile {
-    pub fn new(path: &str) -> Result<Profile> {
-        match serde_json::from_reader(File::open(path)?) {
-            Ok(profile) => Ok(profile),
-            Err(e) => Err(Error::from(e)),
-        }
+pub fn check_profile(path: &str) {
+    //TODO add file check
+}
+
+impl ClientProfile for Profile {
+    fn new(path: &str) -> Profile {
+        println!("{}", path);
+        serde_json::from_reader(File::open(path).unwrap()).unwrap()
     }
 
-    pub fn create_lib_string(&self, dir: &str) -> String {
-        let mut path = "-Djava.class.path=".to_string();
+    fn create_lib_string(&self, dir: &str) -> String {
+        let mut path = String::from("-Djava.class.path=");
         for library in &self.libraries {
-            path += &[dir, library, ":"].join("");
+            path += &Path::new(&[dir, "/libraries/", library, CLASS_PATH_SEPARATOR].join(""))
+                        .to_slash_lossy();
         }
-        path + &self.main
+        let class_path: Vec<_> = self.class_path.iter().map(|s| self.get_client_dir(dir).join(&s).to_slash_lossy()).collect();
+        path += &class_path.join(CLASS_PATH_SEPARATOR);
+        println!("{}", path);
+        path
     }
 
-    pub fn get_native_option(&self) -> String {
-        ["-Djava.library.path=", &self.name, "/native"].join("")
+    fn get_native_option(&self, dir: &str) -> String {
+        format!("{}{}", "-Djava.library.path=", Path::new(dir)
+                                                   .join("natives")
+                                                   .join(&self.version)
+                                                   .to_slash_lossy())
     }
 
-    pub fn create_args(&self, env: &JNIEnv) -> JValue {
-        let vec = vec!["--username", "Belz", "--version", "1.7.10", "--accessToken", "0", "--userProperties", "{}", "--gameDir", "/home/belz/.minecraft/versions", "--assetsDir", "/home/belz/.minecraft/assets/", "--assetIndex", "1.7.10", "--tweakClass", "cpw.mods.fml.common.launcher.FMLTweaker"];
-        let array= env.new_object_array(vec.len() as i32, env.find_class("java/lang/String").unwrap(), JObject::from(env.new_string("").unwrap())).unwrap();
-        for i in 0..vec.len() {
-            env.set_object_array_element(array, i as i32, JObject::from(env.new_string(vec[i]).unwrap())).unwrap();
+    fn create_args(&self, dir: &str, env: &JNIEnv) -> JValue {
+        let mut args = self.client_args.clone();
+        args.push(String::from("--gameDir"));
+        args.push(self.get_client_dir(dir).to_string_lossy().to_string());
+        args.push(String::from("--assetsDir"));
+        args.push(Path::new(dir).join(&self.assets_dir).to_slash_lossy().to_string());
+        args.push(String::from("--assetIndex"));
+        args.push(self.assets.to_string());
+
+        let array= env.new_object_array(
+        						args.len() as i32,
+                                env.find_class("java/lang/String").unwrap(),
+                                JObject::from(env.new_string("").unwrap())).unwrap();
+        for i in 0..args.len() {
+            env.set_object_array_element(
+                    array,
+                    i as i32,
+                    JObject::from(env.new_string(&args[i]).unwrap())).unwrap();
         }
         JValue::from(JObject::from(array))
+    }
+
+    fn get_client_dir(&self, dir: &str) -> PathBuf {
+        Path::new(dir).join(&self.name)
     }
 }
