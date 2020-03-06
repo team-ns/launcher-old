@@ -36,6 +36,8 @@ pub struct AuthResponse {
     pub access_token: String,
 }
 
+#[derive(Deserialize, Serialize, Msg)]
+#[rtype(result = "()")]
 pub struct Error {
     pub msg: String,
 }
