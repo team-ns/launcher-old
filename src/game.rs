@@ -40,13 +40,16 @@ impl Client {
         let libjvm_path = find_libjvm(java_home).unwrap();
 
         let args = InitArgsBuilder::new()
+                                .option("-Dfml.ignoreInvalidMinecraftCertificates=true")
+                                .option("-Dfml.ignorePatchDiscrepancies=true")
+                                .option("-XX:+DisableAttachMechanism")
                                 .option(&profile.get_native_option(dir))
                                 .option(&profile.create_lib_string(dir))
                                 .version(JNIVersion::V8)
                                 .build().unwrap();
+        env::set_current_dir(profile.get_client_dir(dir)).unwrap();
 
         let lib: Container<JvmLibrary> = unsafe { Container::load(libjvm_path).unwrap() };
-
 
         let vm = JavaVM::new(args, lib).unwrap();
         let env = vm.attach_current_thread_permanently().unwrap();
