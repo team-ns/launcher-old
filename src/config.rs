@@ -1,10 +1,11 @@
 use std::path::Path;
 use std::fs::{File, OpenOptions};
 use serde::{Deserialize, Serialize};
+use std::clone::Clone;
+
 use crate::config::AuthProvider::{Empty, JSON};
 use crate::config::auth::{AuthProvide};
-use std::clone::Clone;
-use std::io::Write;
+use crate::security::{SecurityManager};
 
 pub(crate) mod auth;
 mod texture;
@@ -32,6 +33,8 @@ pub struct Config {
     pub port: u32,
     pub auth: AuthProvider,
     pub texture: TextureProvider,
+    #[serde(skip)]
+    pub security: SecurityManager,
     pub workers: usize,
 }
 
@@ -60,7 +63,17 @@ pub struct JsonAuthProvider {
 
 impl Default for Config {
     fn default() -> Self {
-        Config { workers: 3, address: "127.0.0.1".to_string(), port: 8080, auth: Empty, texture: TextureProvider {skin_url: "http://example.com/skin/{}.png".to_string(), cape_url: "http://example.com/cape/{}.png".to_string()} }
+        Config {
+            workers: 3,
+            address: "127.0.0.1".to_string(),
+            port: 8080,
+            auth: Empty,
+            texture: TextureProvider {
+                skin_url: "http://example.com/skin/{}.png".to_string(),
+                cape_url: "http://example.com/cape/{}.png".to_string()
+            },
+            security: SecurityManager::default(),
+        }
     }
 }
 pub struct None;
