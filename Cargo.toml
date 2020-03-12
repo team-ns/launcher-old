@@ -24,6 +24,7 @@ actix-web = "2.0.0"
 actix-web-actors = "2.0.0"
 actix-files = "0.2.1"
 actix-rt = "1.0.0"
+shrust = "0.0.7"
 openssl = "0.10"
 
 [profile.release]

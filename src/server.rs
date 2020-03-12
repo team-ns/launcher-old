@@ -17,10 +17,9 @@ pub async fn start(config: Config) -> std::io::Result<()> {
         App::new()
             .data(data.clone())
             // server
-
             .service(web::resource("/api/").to(websocket::api_route))
             .service(web::resource("/join").route(web::post().to(auth::join)))
-            .service(web::resource("/hasJoin").route(web::get().to(auth::has_join)))
+            .service(web::resource("/hasJoined").route(web::get().to(auth::has_join)))
             // static resources
             .service(
                 fs::Files::new("/static", "static/")
