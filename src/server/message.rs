@@ -1,9 +1,7 @@
-use actix::{AsyncContext, Handler, WrapFuture, ContextFutureSpawner};
+use actix::{AsyncContext, Handler};
 use launcher_api::message::{AuthMessage, ClientMessage, ServerMessage, AuthResponse};
 use launcher_api::message::ClientMessage::Auth;
 use rand::Rng;
-use actix::fut::wrap_future;
-use futures::TryFutureExt;
 
 use crate::config::auth::{AuthResult, Error};
 use crate::server::websocket::WsApiSession;

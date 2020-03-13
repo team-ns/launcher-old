@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::time::{Instant, Duration};
-
 use serde_json::Value;
 use strfmt::Format;
 use uuid::Uuid;

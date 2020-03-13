@@ -49,9 +49,9 @@ impl AuthProvide for JsonAuthProvider {
                 "password": password,
                 "ip": ip
             })).await
-            .map_err(|e| Error { message: "Can't connect".to_string() })?
+            .map_err(|_e| Error { message: "Can't connect".to_string() })?
             .json()
-            .map_err(|e| Error { message: "Can't parse json".to_string() })
+            .map_err(|_e| Error { message: "Can't parse json".to_string() })
             .await?;
         Ok(result)
     }
@@ -63,9 +63,9 @@ impl AuthProvide for JsonAuthProvider {
             .send_json(&serde_json::json!({
                 "uuid": uuid
             })).await
-            .map_err(|e| Error { message: "Can't connect".to_string() })?
+            .map_err(|_e| Error { message: "Can't connect".to_string() })?
             .json()
-            .map_err(|e| Error { message: "Can't parse json".to_string() })
+            .map_err(|_e| Error { message: "Can't parse json".to_string() })
             .await?)
     }
 
@@ -76,9 +76,9 @@ impl AuthProvide for JsonAuthProvider {
             .send_json(&serde_json::json!({
                 "username": username
             })).await
-            .map_err(|e| Error { message: "Can't connect".to_string() })?
+            .map_err(|_e| Error { message: "Can't connect".to_string() })?
             .json()
-            .map_err(|e| Error { message: "Can't parse json".to_string() })
+            .map_err(|_e| Error { message: "Can't parse json".to_string() })
             .await?)
     }
 

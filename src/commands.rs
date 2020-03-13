@@ -1,6 +1,4 @@
-use std::io::Write;
 use std::thread;
-
 use log::info;
 use shrust::{Shell, ShellIO};
 

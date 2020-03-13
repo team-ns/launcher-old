@@ -1,7 +1,6 @@
-use std::path::Path;
-use std::fs::{File, OpenOptions};
 use serde::{Deserialize, Serialize};
 use std::clone::Clone;
+use launcher_api::config::Configurable;
 
 use crate::config::AuthProvider::{Empty, JSON};
 use crate::config::auth::{AuthProvide};
@@ -9,23 +8,6 @@ use crate::security::{SecurityManager};
 
 pub(crate) mod auth;
 mod texture;
-
-pub fn get_config() -> std::io::Result<Config> {
-    let config_path = Path::new("config.json");
-    let config_file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .read(true)
-        .open(config_path)?;
-    match serde_json::from_reader(&config_file) {
-        Ok(config) => Ok(config),
-        Err(e) => {
-            let config = Config::default();
-            serde_json::to_writer_pretty(&config_file, &config)?;
-            Ok(config)
-        },
-    }
-}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Config {
@@ -60,6 +42,7 @@ pub struct JsonAuthProvider {
     pub update_access_token_url: String,
 }
 
+impl Configurable for Config { }
 
 impl Default for Config {
     fn default() -> Self {

@@ -1,7 +1,6 @@
 use actix_web::{HttpResponse, web};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use log::debug;
 
 use crate::config::Config;
 
