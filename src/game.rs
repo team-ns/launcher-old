@@ -22,8 +22,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn start(&self) {
-        let dir = &format!("/home/belz/.launcher");
+    pub fn start(&self, dir: &str) {
         profile::check_profile(&self.name);
         let profile: Profile = ClientProfile::new(&Path::new(dir)
                                                             .join(&self.name)
