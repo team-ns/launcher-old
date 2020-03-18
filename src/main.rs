@@ -5,8 +5,10 @@ mod game;
 mod security;
 mod config;
 mod client;
+mod runtime;
 
 fn main() {
+    runtime::start();
     let config = Config::get_config(
         dirs::config_dir().unwrap()
             .join("nsl")

@@ -19,6 +19,17 @@ openssl = "0.10"
 jni = { git = "https://gitlab.com/nsl_team/jni-rs" }
 launcher_api = {git = "https://gitlab.com/nsl_team/launcherapi"}
 
+[dependencies.gtk]
+version = "0.8.0"
+features = ["v3_16"]
+
+[dependencies.gio]
+version = ""
+features = ["v2_44"]
+
+[dependencies.gdk]
+version = "0.12.1"
+
 [profile.release]
 opt-level = 'z'
 lto = true

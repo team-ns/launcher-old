@@ -43,7 +43,13 @@ impl ClientHandler {
                 password: self.security.encrypt(password)
             }
         );
-        send_message(self, message);
+        self.send_message(message);
+    }
+
+    fn send_message(&mut self, message: ClientMessage) {
+        self.runtime.block_on(
+            self.writer.send(Message::Text(serde_json::to_string(&message).unwrap()))
+        ).unwrap();
     }
 }
 
@@ -57,10 +63,4 @@ fn handle_message(message: Message) {
             _ => {}
         }
     }
-}
-
-fn send_message(handler: &mut ClientHandler, message: ClientMessage) {
-    handler.runtime.block_on(
-        handler.writer.send(Message::Text(serde_json::to_string(&message).unwrap()))
-    ).unwrap();
 }
