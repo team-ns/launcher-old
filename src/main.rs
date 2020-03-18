@@ -1,6 +1,5 @@
 use launcher_api::config::Configurable;
 use config::Config;
-use std::path::Path;
 
 mod game;
 mod security;
