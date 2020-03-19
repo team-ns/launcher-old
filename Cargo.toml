@@ -16,6 +16,8 @@ futures-util = { version = "0.3.4", default-features = false, features = ["sink"
 tokio-tungstenite = "0.10"
 dirs = "2.0"
 openssl = "0.10"
+relm = "0.19.0"
+relm-derive = "0.19.0"
 jni = { git = "https://gitlab.com/nsl_team/jni-rs" }
 launcher_api = {git = "https://gitlab.com/nsl_team/launcherapi"}
 
