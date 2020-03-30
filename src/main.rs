@@ -13,8 +13,7 @@ mod runtime;
 fn main() {
     env_logger::init();
     let mut socket = WebSocketClient::new("ws://127.0.0.1:8080/api/");
-    thread::sleep(Duration::from_secs(5));
-    socket.auth("Test", "test");
+    runtime::start(socket);
    /* let config = Config::get_config(
         dirs::config_dir().unwrap()
             .join("nsl")

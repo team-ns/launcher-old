@@ -45,14 +45,6 @@ impl Handler for Client {
         let mut req = Request::from_url(url)?;
         req.headers_mut()
             .push(("Origin".into(), get_origin(url).into()));
-
-
-        if true {
-            eprintln!("WebSocket upgrade request");
-            eprintln!("---");
-            eprintln!("{}", req);
-        }
-
         Ok(req)
     }
 
