@@ -2,17 +2,17 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::mpsc::Receiver;
 use std::thread;
 
-use launcher_api::message::{AuthMessage, ClientMessage, ServerMessage};
+use launcher_api::message::{AuthMessage, ClientMessage, ServerMessage, AuthResponse};
 use launcher_api::message::Error;
 use launcher_api::message::ServerMessage::{Auth, Error as OtherError};
 use openssl::ssl::{SslConnector, SslMethod, SslStream};
-use ws::{ErrorKind, Handler, Handshake, Request, WebSocket};
+use url::Url;
+use ws::{ErrorKind, Handler, Handshake, Request, WebSocket, CloseCode};
 use ws::Message;
 use ws::util::TcpStream;
 
 use crate::security;
 use crate::security::SecurityManager;
-use url::Url;
 
 pub struct WebSocketClient {
     out: ws::Sender,
@@ -31,12 +31,12 @@ impl Handler for Client {
         match msg {
             Message::Text(t) => {
                 if let Ok(message) = serde_json::from_str::<ServerMessage>(&t) {
-                    self.sender.send(message);
-                } else {
-                    self.sender.send(ServerMessage::Error(Error { msg: "work".to_string() }));
+                    self.sender.send(message).unwrap();
                 }
             }
-            Message::Binary(_) => {}
+            Message::Binary(_) => {
+                // nothing
+            }
         }
         Ok(())
     }
@@ -51,7 +51,7 @@ impl Handler for Client {
 
 
 
-    /* fn upgrade_ssl_client(
+   /*  fn upgrade_ssl_client(
          &mut self,
          sock: TcpStream,
          _: &url::Url,
@@ -86,7 +86,7 @@ impl WebSocketClient {
             }
         ).unwrap();
         let parsed: url::Url = Url::parse(&address.to_string()).unwrap();
-        ws.connect(parsed);
+        ws.connect(parsed).unwrap();
         let sender = ws.broadcaster();
 
         thread::Builder::new()
@@ -104,7 +104,7 @@ impl WebSocketClient {
     }
 
 
-    pub fn auth(&mut self, login: &str, password: &str) {
+    pub fn auth(&mut self, login: &str, password: &str) -> Result<AuthResponse, Error> {
         let message = ClientMessage::Auth(
             AuthMessage {
                 login: String::from(login),
@@ -113,15 +113,15 @@ impl WebSocketClient {
         );
         match self.send_sync(message) {
             Auth(auth) => {
-                println!("UUID - {} : TOKEN - {}", auth.uuid, auth.access_token);
+                Ok(auth)
             }
-            OtherError(e) => { println!("Error: {}", e.msg) }
-        };
+            OtherError(e) => { Err(e) }
+        }
     }
 
 
     fn send_sync(&mut self, msg: ClientMessage) -> ServerMessage {
-        self.out.send(Message::text(serde_json::to_string(&msg).unwrap()));
+        self.out.send(Message::text(serde_json::to_string(&msg).unwrap())).unwrap();
         match self.recv.recv() {
             Ok(message) => {
                 message

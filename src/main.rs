@@ -1,8 +1,6 @@
 use launcher_api::config::Configurable;
 use config::Config;
 use crate::client::WebSocketClient;
-use std::thread;
-use std::time::Duration;
 
 mod game;
 mod security;
