@@ -4,6 +4,7 @@ use launcher_api::message::ClientMessage::Auth;
 use rand::Rng;
 
 use crate::config::auth::{AuthResult, Error};
+use launcher_api::message::Error as ServerError;
 use crate::server::websocket::WsApiSession;
 
 impl Handler<AuthResult> for WsApiSession {
@@ -18,7 +19,8 @@ impl Handler<AuthResult> for WsApiSession {
             ctx.text(serde_json::to_string(&ServerMessage::Auth(AuthResponse { uuid: uuid.to_string(), access_token: access_token.to_string() })).unwrap());
             ctx.spawn(actix::fut::wrap_future(async move { auth.update_access_token(&uuid, &access_token.clone()).await; }));
         } else {
-            ctx.text(format!("Error: {}", msg.message.unwrap()));
+            let message = ServerMessage::Error(ServerError { msg: msg.message.unwrap()});
+            ctx.text(serde_json::to_string(&message).unwrap());
         }
     }
 }
