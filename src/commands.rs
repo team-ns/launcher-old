@@ -3,7 +3,7 @@ use std::thread;
 
 use log::info;
 use rustyline::{CompletionType, Context, EditMode, Editor, OutputStreamType};
-use rustyline::completion::{Completer, extract_word, Pair};
+use rustyline::completion::{Completer, extract_word};
 use rustyline::Config as LineConfig;
 use rustyline::error::ReadlineError;
 use rustyline::line_buffer::LineBuffer;
@@ -11,6 +11,7 @@ use rustyline::validate::{ValidationContext, ValidationResult, Validator};
 use rustyline_derive::{Completer, Helper, Highlighter, Hinter, Validator};
 
 use crate::config::Config;
+use std::process::exit;
 
 type CmdFn = Box<dyn Fn(&Config, &[&str])>;
 
@@ -42,11 +43,11 @@ impl Completer for CommandHelper {
     type Candidate = String;
 
 
-    fn complete(&self, line: &str, pos: usize, ctx: &Context) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
-        let (word_start, word_to_complete) = extract_word(line, pos, None, &[32u8][..]);
+    fn complete(&self, line: &str, pos: usize, _ctx: &Context) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
+       let (word_start, _) = extract_word(line, pos, None, &[32u8][..]);
         let results = self.commands.keys()
             .filter_map(|cmd| {
-                if cmd.starts_with(line){
+                if cmd.starts_with(line.trim()){
                     Some(String::from(cmd))
                 } else {
                     None
@@ -108,7 +109,8 @@ pub fn start(config: Config) {
 
                 }
                 Err(ReadlineError::Interrupted) => {
-                    println!("End");
+                    println!("Bye");
+                    exit(0);
                     break;
                 }
                 _ => {}
