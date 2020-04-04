@@ -1,8 +1,8 @@
 use rust_embed::RustEmbed;
-use sciter::{Element, HELEMENT,  Value};
+use sciter::{Element, HELEMENT, Value};
+use sciter::{dispatch_script_call, vmap};
 use sciter::dom::event::{BEHAVIOR_EVENTS, PHASE_MASK};
 use sciter::dom::EventReason;
-use sciter::{vmap, dispatch_script_call};
 
 use crate::client::WebSocketClient;
 
@@ -89,13 +89,12 @@ pub fn start(client: WebSocketClient) {
 
     frame.archive_handler(&resources).expect("Invalid archive");
 
-    frame.load_file("this://app/login.htm");
-
     frame.event_handler(Handler {
         ws: client,
         root: None
     });
 
+    frame.load_file("this://app/menu.htm");
     frame.run_app();
 }
 
