@@ -5,13 +5,15 @@ use serde::{Deserialize, Serialize};
 #[rtype(result = "()")]
 pub enum ClientMessage {
     Auth(AuthMessage),
-    Profiles(ProfilesMessage)
+    Profiles(ProfilesMessage),
+    ProfileResources(ProfileResourcesMessage)
 }
 
 #[derive(Deserialize, Serialize, Msg)]
 #[rtype(result = "()")]
 pub enum ServerMessage {
     Auth(AuthResponse),
+    ProfileResources(ProfileResourcesResponse),
     Error(Error)
 }
 
@@ -24,8 +26,20 @@ pub struct AuthMessage {
 
 #[derive(Deserialize, Serialize, Msg)]
 #[rtype(result = "()")]
+pub struct ProfileResourcesMessage {
+    pub profile: String
+}
+
+#[derive(Deserialize, Serialize, Msg)]
+#[rtype(result = "()")]
 pub struct ProfilesMessage {
 
+}
+
+#[derive(Deserialize, Serialize, Msg)]
+#[rtype(result = "()")]
+pub struct ProfileResourcesResponse {
+    pub list: Vec<String>
 }
 
 #[derive(Deserialize, Serialize, Msg)]
