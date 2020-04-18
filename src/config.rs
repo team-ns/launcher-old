@@ -5,6 +5,7 @@ use launcher_api::config::Configurable;
 use crate::config::AuthProvider::{Empty, JSON};
 use crate::config::auth::{AuthProvide};
 use crate::security::{SecurityManager};
+use crate::server::profile::get_profiles;
 
 pub(crate) mod auth;
 mod texture;
@@ -17,6 +18,9 @@ pub struct Config {
     pub texture: TextureProvider,
     #[serde(skip)]
     pub security: SecurityManager,
+    #[serde(skip)]
+    #[serde(default = "get_profiles")]
+    pub profiles: Vec<String>,
     pub workers: usize,
 }
 
@@ -56,6 +60,7 @@ impl Default for Config {
                 cape_url: "http://example.com/cape/{}.png".to_string()
             },
             security: SecurityManager::default(),
+            profiles: get_profiles()
         }
     }
 }

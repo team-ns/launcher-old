@@ -1,7 +1,8 @@
 use actix::{AsyncContext, Handler};
-use launcher_api::message::{AuthMessage, ClientMessage, ServerMessage, AuthResponse};
-use launcher_api::message::ClientMessage::Auth;
+use launcher_api::message::{AuthMessage, ClientMessage, ServerMessage, AuthResponse, ProfileResourcesMessage, ProfileResourcesResponse};
+use launcher_api::message::ClientMessage::{Auth, ProfileResources};
 use rand::Rng;
+use walkdir::WalkDir;
 
 use crate::config::auth::{AuthResult, Error};
 use launcher_api::message::Error as ServerError;
@@ -56,12 +57,32 @@ impl Handler<AuthMessage> for WsApiSession {
     }
 }
 
+impl Handler<ProfileResourcesMessage> for WsApiSession {
+    type Result = ();
+    fn handle(&mut self, msg: ProfileResourcesMessage, ctx: &mut Self::Context) -> Self::Result {
+        if self.config.profiles.contains(&msg.profile) {
+            let list = WalkDir::new(format!("static/{}", msg.profile))
+                .into_iter()
+                .filter(|e| e.is_ok() && e.as_ref().ok().unwrap().metadata().unwrap().is_file())
+                .map(|e| e.ok().unwrap().path().display().to_string()).collect::<Vec<String>>();
+            let message = ServerMessage::ProfileResources(ProfileResourcesResponse{list});
+            ctx.text(serde_json::to_string(&message).unwrap());
+        } else {
+            let message = ServerMessage::Error(ServerError { msg: String::from("This profile doesn't exist!")});
+            ctx.text(serde_json::to_string(&message).unwrap());
+        }
+    }
+}
+
 impl Handler<ClientMessage> for WsApiSession {
     type Result = ();
 
     fn handle(&mut self, msg: ClientMessage, ctx: &mut Self::Context) -> Self::Result {
         match msg {
             Auth(message) => {
+                ctx.address().do_send(message);
+            }
+            ProfileResources(message) => {
                 ctx.address().do_send(message);
             }
             _ => {}

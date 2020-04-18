@@ -10,6 +10,7 @@ use actix_web::middleware::Logger;
 mod message;
 mod auth;
 mod websocket;
+pub mod profile;
 
 pub async fn start(config: Config) -> std::io::Result<()> {
     let data = config.borrow().clone();
