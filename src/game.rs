@@ -1,12 +1,12 @@
-use std::path::{PathBuf, Path};
-use std::process::Command;
-use std::env;
-use jni::{InitArgsBuilder, JNIVersion, JavaVM};
-use jni::djl::JvmLibrary;
 use dlopen::wrapper::Container;
-use profile::ClientProfile;
+use jni::djl::JvmLibrary;
+use jni::{InitArgsBuilder, JNIVersion, JavaVM};
 use launcher_api::profile::Profile;
-use path_slash::{PathBufExt};
+use path_slash::PathBufExt;
+use profile::ClientProfile;
+use std::env;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 mod profile;
 
@@ -24,10 +24,12 @@ pub struct Client {
 impl Client {
     pub fn start(&self, dir: &str) {
         profile::check_profile(&self.name);
-        let profile: Profile = ClientProfile::new(&Path::new(dir)
-                                                            .join(&self.name)
-                                                            .join("profile.json")
-                                                            .to_slash_lossy());
+        let profile: Profile = ClientProfile::new(
+            &Path::new(dir)
+                .join(&self.name)
+                .join("profile.json")
+                .to_slash_lossy(),
+        );
 
         let java_home = match env::var("JAVA_HOME") {
             Ok(java_home) => PathBuf::from(java_home),
@@ -39,24 +41,31 @@ impl Client {
         let libjvm_path = find_libjvm(java_home).unwrap();
 
         let args = InitArgsBuilder::new()
-                                .option("-Dfml.ignoreInvalidMinecraftCertificates=true")
-                                .option("-Dfml.ignorePatchDiscrepancies=true")
-                                .option("-XX:+DisableAttachMechanism")
-                                .option(&profile.get_native_option(dir))
-                                .option(&profile.create_lib_string(dir))
-                                .version(JNIVersion::V8)
-                                .build().unwrap();
+            .option("-Dfml.ignoreInvalidMinecraftCertificates=true")
+            .option("-Dfml.ignorePatchDiscrepancies=true")
+            .option("-XX:+DisableAttachMechanism")
+            .option(&profile.get_native_option(dir))
+            .option(&profile.create_lib_string(dir))
+            .version(JNIVersion::V8)
+            .build()
+            .unwrap();
         env::set_current_dir(profile.get_client_dir(dir)).unwrap();
 
         let lib: Container<JvmLibrary> = unsafe { Container::load(libjvm_path).unwrap() };
 
         let vm = JavaVM::new(args, lib).unwrap();
         let env = vm.attach_current_thread_permanently().unwrap();
-        vm.attach_current_thread().unwrap().call_static_method(
-                                                &profile.main_class,
-                                                "main",
-                                                "([Ljava/lang/String;)V",
-                                                &[profile.create_args(dir, &env)]).unwrap().v().unwrap();
+        vm.attach_current_thread()
+            .unwrap()
+            .call_static_method(
+                &profile.main_class,
+                "main",
+                "([Ljava/lang/String;)V",
+                &[profile.create_args(dir, &env)],
+            )
+            .unwrap()
+            .v()
+            .unwrap();
     }
 }
 

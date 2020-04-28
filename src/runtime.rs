@@ -1,22 +1,20 @@
 use rust_embed::RustEmbed;
-use sciter::{Element, HELEMENT, Value};
-use sciter::{dispatch_script_call, vmap};
 use sciter::dom::event::{BEHAVIOR_EVENTS, PHASE_MASK};
 use sciter::dom::EventReason;
+use sciter::{dispatch_script_call, vmap};
+use sciter::{Element, Value, HELEMENT};
 
 use crate::client::WebSocketClient;
 
 mod resources;
 
-
 #[derive(RustEmbed)]
 #[folder = "runtime/"]
 struct Asset;
 
-
 struct Handler {
     ws: WebSocketClient,
-    root: Option<Element>
+    root: Option<Element>,
 }
 
 impl sciter::EventHandler for Handler {
@@ -25,16 +23,15 @@ impl sciter::EventHandler for Handler {
         self.root = Some(element);
     }
 
-   /* dispatch_script_call! {
-		fn load_profiles();
-		fn login();
-	}
-*/
-
+    /* dispatch_script_call! {
+            fn load_profiles();
+            fn login();
+        }
+    */
 }
 
 impl Handler {
-     /*fn load_profiles(&mut self) -> Value {
+    /*fn load_profiles(&mut self) -> Value {
         //TODO: Add websocket profiles
         let data = vmap! {
                   "name" => "Test",
@@ -76,8 +73,9 @@ pub fn start(client: WebSocketClient) {
     sciter::set_options(sciter::RuntimeOptions::ScriptFeatures(
         sciter::SCRIPT_RUNTIME_FEATURES::ALLOW_SYSINFO as u8
             | sciter::SCRIPT_RUNTIME_FEATURES::ALLOW_FILE_IO as u8
-            | sciter::SCRIPT_RUNTIME_FEATURES::ALLOW_EVAL as u8
-    )).unwrap();
+            | sciter::SCRIPT_RUNTIME_FEATURES::ALLOW_EVAL as u8,
+    ))
+    .unwrap();
 
     sciter::set_options(sciter::RuntimeOptions::DebugMode(true)).unwrap();
 
@@ -86,15 +84,13 @@ pub fn start(client: WebSocketClient) {
         .fixed()
         .create();
 
-
     frame.archive_handler(&resources).expect("Invalid archive");
 
     frame.event_handler(Handler {
         ws: client,
-        root: None
+        root: None,
     });
 
     frame.load_file("this://app/menu.htm");
     frame.run_app();
 }
-
