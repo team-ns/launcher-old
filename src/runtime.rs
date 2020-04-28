@@ -25,16 +25,16 @@ impl sciter::EventHandler for Handler {
         self.root = Some(element);
     }
 
-    dispatch_script_call! {
+   /* dispatch_script_call! {
 		fn load_profiles();
 		fn login();
 	}
-
+*/
 
 }
 
 impl Handler {
-    fn load_profiles(&mut self) -> Value {
+     /*fn load_profiles(&mut self) -> Value {
         //TODO: Add websocket profiles
         let data = vmap! {
                   "name" => "Test",
@@ -67,7 +67,7 @@ impl Handler {
         let res = self.ws.auth(&username, &password);
         //TODO: Add remember check
         Value::from(res.is_ok())
-    }
+    }*/
 }
 
 pub fn start(client: WebSocketClient) {

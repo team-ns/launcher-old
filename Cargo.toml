@@ -1,7 +1,7 @@
 [package]
 name = "nslauncher"
 version = "0.1.0"
-authors = ["belz, jeb"]
+authors = ["Belz", "Jeb"]
 edition = "2018"
 
 [dependencies]
@@ -15,11 +15,20 @@ dirs = "2.0"
 env_logger = "0.7.1"
 url = "^2.0.0"
 openssl = "0.10"
-jni = { git = "https://gitlab.com/nsl_team/jni-rs" }
-launcher_api = {git = "https://gitlab.com/nsl_team/launcherapi"}
 sciter-rs="*"
 rust-embed="5.5.1"
+yarws = "0.2.0"
 
+[dependencies.tokio]
+version = "0.2.19"
+features = ["macros", "sync"]
+
+[dependencies.launcher_api]
+git = "https://gitlab.com/nsl_team/launcherapi"
+
+[dependencies.jni]
+git = "https://gitlab.com/nsl_team/jni-rs"
+branch = "dynamic"
 
 [profile.release]
 opt-level = 'z'
