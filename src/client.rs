@@ -22,7 +22,7 @@ impl WebSocketClient {
             .await
             .unwrap()
             .into_text();
-        let (mut s, mut r) = ws.into_channel().await;
+        let (s, r) = ws.into_channel().await;
         WebSocketClient {
             security: security::get_manager(),
             recv: r,
@@ -57,4 +57,3 @@ impl WebSocketClient {
         }
     }
 }
-

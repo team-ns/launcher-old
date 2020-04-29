@@ -14,13 +14,13 @@ dirs = "2.0"
 env_logger = "0.7.1"
 url = "^2.0.0"
 openssl = "0.10"
-sciter-rs="*"
+web-view = "0.6.0"
 rust-embed="5.5.1"
 yarws = "0.2.0"
 
 [dependencies.tokio]
 version = "0.2.19"
-features = ["macros", "sync"]
+features = ["macros", "sync", "rt-core", "blocking"]
 
 [dependencies.launcher_api]
 git = "https://gitlab.com/nsl_team/launcherapi"

@@ -12,17 +12,7 @@ mod security;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
-    let mut socket = WebSocketClient::new("ws://127.0.0.1:8080/api/").await;
-    println!(
-        "{}",
-        socket
-            .auth("Test", "test")
-            .await
-            .map_err(|v| v.msg)
-            .unwrap()
-            .uuid
-    );
-    runtime::start(socket);
+    runtime::start().await;
     Ok(())
     /* let config = Config::get_config(
         dirs::config_dir().unwrap()
