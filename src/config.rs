@@ -1,6 +1,6 @@
 use launcher_api::config::Configurable;
-use serde::{Serialize, Deserialize};
 use path_slash::PathExt;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -12,13 +12,12 @@ pub struct Config {
     pub url: String,
 }
 
-impl Configurable for Config { }
+impl Configurable for Config {}
 
 impl Default for Config {
     fn default() -> Self {
         let config_json = include_str!("../config.json")
-                        .replace("%homeDir%", &dirs::home_dir().unwrap()
-                        .to_slash_lossy());
+            .replace("%homeDir%", &dirs::home_dir().unwrap().to_slash_lossy());
         serde_json::from_str(&config_json).unwrap()
     }
 }
