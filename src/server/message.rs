@@ -30,7 +30,7 @@ impl Handler<Error> for WsApiSession {
     type Result = ();
 
     fn handle(&mut self, msg: Error, ctx: &mut Self::Context) -> Self::Result {
-        let message = ServerMessage::Error(ServerError { msg: msg.message.unwrap()});
+        let message = ServerMessage::Error(ServerError { msg: msg.message});
         ctx.text(serde_json::to_string(&message).unwrap());
     }
 }

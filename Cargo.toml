@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 serde = {version = "1.0", features = ["derive"]}
 serde_json = "1.0"
-base64 = "0.11.0"
+base64 = "0.12.1"
 uuid = { version = "0.8.1", features = ["serde"] }
 futures = "0.3.4"
 async-trait = "0.1.24"
@@ -28,6 +28,15 @@ rustyline = "6.0.0"
 rustyline-derive = "=0.3.0"
 openssl = "0.10"
 walkdir = "2"
+
+[dependencies.rsa]
+git = "https://github.com/RustCrypto/RSA"
+rev = "826ea300045a4c765b9047d2342bb710793d2fbe"
+features = ["pem"]
+
+[dependencies.rsa-export]
+git = "https://gitlab.com/nsl_team/rsa-export"
+features = ["pem"]
 
 [profile.release]
 lto = true
