@@ -13,10 +13,16 @@ path-slash = "0.1.1"
 dirs = "2.0"
 env_logger = "0.7.1"
 url = "^2.0.0"
-openssl = "0.10"
+rand = "0.7.3"
+base64 = "0.12.1"
 web-view = "0.6.0"
 rust-embed="5.5.1"
 yarws = "0.2.0"
+
+[dependencies.rsa]
+git = "https://github.com/RustCrypto/RSA"
+rev = "826ea300045a4c765b9047d2342bb710793d2fbe"
+features = ["pem"]
 
 [dependencies.tokio]
 version = "0.2.19"

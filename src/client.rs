@@ -3,7 +3,6 @@ use std::thread;
 use launcher_api::message::Error;
 use launcher_api::message::ServerMessage::{Auth, Error as OtherError};
 use launcher_api::message::{AuthMessage, AuthResponse, ClientMessage, ServerMessage};
-use openssl::ssl::{SslConnector, SslMethod, SslStream};
 use tokio::sync::mpsc::{Receiver, Sender};
 use url::Url;
 

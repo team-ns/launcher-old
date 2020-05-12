@@ -1,25 +1,26 @@
-use openssl::base64;
-use openssl::pkey::Public;
-use openssl::rsa::{Padding, Rsa};
+use rand::rngs::OsRng;
+use rsa::{PaddingScheme, PublicKey, RSAPublicKey};
+use std::convert::TryFrom;
 
 pub fn get_manager() -> SecurityManager {
+    let bytes = include_bytes!("../public_key");
     SecurityManager {
-        public_key: Rsa::public_key_from_der(include_bytes!("../public_key")).unwrap(),
+        public_key: RSAPublicKey::try_from(
+            rsa::pem::parse(String::from_utf8_lossy(bytes).to_string()).unwrap(),
+        )
+        .unwrap(),
     }
 }
 
 pub struct SecurityManager {
-    public_key: Rsa<Public>,
+    public_key: RSAPublicKey,
 }
 
 impl SecurityManager {
     pub fn encrypt(&self, text: &str) -> String {
-        let mut result: Vec<u8> = vec![0; self.public_key.size() as usize];
-        let len: usize = self
+        let msg = self
             .public_key
-            .public_encrypt(text.as_bytes(), &mut result, Padding::PKCS1)
-            .unwrap();
-        result.truncate(len);
-        base64::encode_block(&result)
+            .encrypt(&mut OsRng, PaddingScheme::PKCS1v15, text.as_ref());
+        base64::encode(msg.unwrap())
     }
 }
