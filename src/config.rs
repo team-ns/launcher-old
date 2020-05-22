@@ -1,10 +1,10 @@
+use launcher_api::config::Configurable;
 use serde::{Deserialize, Serialize};
 use std::clone::Clone;
-use launcher_api::config::Configurable;
 
+use crate::config::auth::AuthProvide;
 use crate::config::AuthProvider::{Empty, JSON};
-use crate::config::auth::{AuthProvide};
-use crate::security::{SecurityManager};
+use crate::security::SecurityManager;
 use crate::server::profile::get_profiles;
 
 pub(crate) mod auth;
@@ -27,8 +27,8 @@ pub struct Config {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TextureProvider {
-     skin_url: String,
-     cape_url: String,
+    skin_url: String,
+    cape_url: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -46,7 +46,7 @@ pub struct JsonAuthProvider {
     pub update_access_token_url: String,
 }
 
-impl Configurable for Config { }
+impl Configurable for Config {}
 
 impl Default for Config {
     fn default() -> Self {
@@ -57,19 +57,19 @@ impl Default for Config {
             auth: Empty,
             texture: TextureProvider {
                 skin_url: "http://example.com/skin/{}.png".to_string(),
-                cape_url: "http://example.com/cape/{}.png".to_string()
+                cape_url: "http://example.com/cape/{}.png".to_string(),
             },
             security: SecurityManager::default(),
-            profiles: get_profiles()
+            profiles: get_profiles(),
         }
     }
 }
 pub struct None;
 impl AuthProvider {
-    pub fn get_provide<'a> (&'a self) -> Box<dyn AuthProvide> {
+    pub fn get_provide<'a>(&'a self) -> Box<dyn AuthProvide> {
         match self.clone() {
-            Empty => { Box::new(None {}) }
-            JSON(auth) => { Box::new(auth) }
+            Empty => Box::new(None {}),
+            JSON(auth) => Box::new(auth),
         }
     }
 }

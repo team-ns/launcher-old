@@ -31,7 +31,12 @@ pub struct Error {
 
 #[async_trait(? Send)]
 pub trait AuthProvide {
-    async fn auth(&self, login: &String, password: &String, ip: &String) -> Result<AuthResult, Error>;
+    async fn auth(
+        &self,
+        login: &String,
+        password: &String,
+        ip: &String,
+    ) -> Result<AuthResult, Error>;
     async fn get_entry(&self, uuid: &Uuid) -> Result<Entry, Error>;
     async fn get_entry_from_name(&self, username: &String) -> Result<Entry, Error>;
     async fn update_access_token(&self, uuid: &Uuid, token: &String);
@@ -40,71 +45,96 @@ pub trait AuthProvide {
 
 #[async_trait(? Send)]
 impl AuthProvide for JsonAuthProvider {
-    async fn auth(&self, login: &String, password: &String, ip: &String) -> Result<AuthResult, Error> {
+    async fn auth(
+        &self,
+        login: &String,
+        password: &String,
+        ip: &String,
+    ) -> Result<AuthResult, Error> {
         let client = Client::default();
 
-        let result = client.post(&self.auth_url)
+        let result = client
+            .post(&self.auth_url)
             .send_json(&serde_json::json!({
                 "username": login,
                 "password": password,
                 "ip": ip
-            })).await
-            .map_err(|_e| Error { message: "Can't connect".to_string() })?
+            }))
+            .await
+            .map_err(|_e| Error {
+                message: "Can't connect".to_string(),
+            })?
             .json()
-            .map_err(|_e| Error { message: "Can't parse json".to_string() })
+            .map_err(|_e| Error {
+                message: "Can't parse json".to_string(),
+            })
             .await?;
         Ok(result)
     }
 
-
     async fn get_entry(&self, uuid: &Uuid) -> Result<Entry, Error> {
         let client = Client::default();
-        Ok(client.post(&self.entry_url)
-            .send_json(&serde_json::json!({
-                "uuid": uuid
-            })).await
-            .map_err(|_e| Error { message: "Can't connect".to_string() })?
+        Ok(client
+            .post(&self.entry_url)
+            .send_json(&serde_json::json!({ "uuid": uuid }))
+            .await
+            .map_err(|_e| Error {
+                message: "Can't connect".to_string(),
+            })?
             .json()
-            .map_err(|_e| Error { message: "Can't parse json".to_string() })
+            .map_err(|_e| Error {
+                message: "Can't parse json".to_string(),
+            })
             .await?)
     }
-
 
     async fn get_entry_from_name(&self, username: &String) -> Result<Entry, Error> {
         let client = Client::default();
-        Ok(client.post(&self.entry_url)
-            .send_json(&serde_json::json!({
-                "username": username
-            })).await
-            .map_err(|_e| Error { message: "Can't connect".to_string() })?
+        Ok(client
+            .post(&self.entry_url)
+            .send_json(&serde_json::json!({ "username": username }))
+            .await
+            .map_err(|_e| Error {
+                message: "Can't connect".to_string(),
+            })?
             .json()
-            .map_err(|_e| Error { message: "Can't parse json".to_string() })
+            .map_err(|_e| Error {
+                message: "Can't parse json".to_string(),
+            })
             .await?)
     }
 
-
     async fn update_access_token(&self, uuid: &Uuid, token: &String) {
         let client = Client::default();
-        let response = client.post(&self.update_access_token_url)
+        let response = client
+            .post(&self.update_access_token_url)
             .send_json(&serde_json::json!({
                 "uuid": uuid,
                 "accessToken": token
-            })).await;
+            }))
+            .await;
     }
 
     async fn update_server_id(&self, uuid: &Uuid, server_id: &String) {
         let client = Client::default();
-        let response = client.post(&self.update_server_id_url)
+        let response = client
+            .post(&self.update_server_id_url)
             .send_json(&serde_json::json!({
             "uuid": uuid,
             "serverId": server_id
-            })).await;
+            }))
+            .await;
     }
 }
 
 #[async_trait(? Send)]
 impl AuthProvide for None {
-    async fn auth(&self, _login: &String, _password: &String, _ip: &String) -> Result<AuthResult, Error> {
+    async fn auth(
+        &self,
+        _login: &String,
+        _password: &String,
+        _ip: &String,
+    ) -> Result<AuthResult, Error> {
         unimplemented!()
     }
 
@@ -124,4 +154,3 @@ impl AuthProvide for None {
         unimplemented!()
     }
 }
-

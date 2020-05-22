@@ -1,10 +1,12 @@
 use std::time::{Duration, Instant};
 
 use actix::{Actor, ActorContext, AsyncContext, StreamHandler};
-use actix_web::{Error, HttpRequest, HttpResponse, web};
+use actix_web::{web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 
-use crate::config::Config;
+use crate::LaunchServer;
+use std::ops::Deref;
+use std::sync::{Arc, RwLock};
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -13,7 +15,7 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub async fn api_route(
     req: HttpRequest,
-    data: web::Data<Config>,
+    data: web::Data<RwLock<LaunchServer>>,
     stream: web::Payload,
 ) -> Result<HttpResponse, Error> {
     let address = req.peer_addr();
@@ -23,9 +25,8 @@ pub async fn api_route(
         ws::start(
             WsApiSession {
                 hb: Instant::now(),
-                config: data.get_ref().clone(),
+                launch_server: Arc::clone(data.deref()),
                 ip: address.unwrap().ip().to_string(),
-
             },
             &req,
             stream,
@@ -33,14 +34,13 @@ pub async fn api_route(
     }
 }
 
-
 /// server connection is long running connection, it easier
 /// to handle with an actor
 pub struct WsApiSession {
     /// Client must send ping at least once per 10 seconds (CLIENT_TIMEOUT),
     /// otherwise we drop connection.
     hb: Instant,
-    pub config: Config,
+    pub launch_server: Arc<RwLock<LaunchServer>>,
     pub ip: String,
 }
 
@@ -54,11 +54,7 @@ impl Actor for WsApiSession {
 }
 
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsApiSession {
-    fn handle(
-        &mut self,
-        msg: Result<ws::Message, ws::ProtocolError>,
-        ctx: &mut Self::Context,
-    ) {
+    fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
         // process server messages
         println!("WS: {:?}", msg);
         match msg {
@@ -70,11 +66,12 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsApiSession {
                 self.hb = Instant::now();
             }
             Ok(ws::Message::Text(text)) => {
-                let mes: Result<launcher_api::message::ClientMessage, serde_json::error::Error> = serde_json::from_str(&text);
+                let mes: Result<launcher_api::message::ClientMessage, serde_json::error::Error> =
+                    serde_json::from_str(&text);
 
                 match mes {
-                    Ok(m) => { ctx.address().do_send(m) }
-                    Err(e) => { println!("Error: {}", e) }
+                    Ok(m) => ctx.address().do_send(m),
+                    Err(e) => println!("Error: {}", e),
                 }
             }
             Ok(ws::Message::Binary(bin)) => ctx.binary(bin),

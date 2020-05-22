@@ -26,7 +26,6 @@ actix-files = "0.2.1"
 actix-rt = "1.0.0"
 rustyline = "6.0.0"
 rustyline-derive = "=0.3.0"
-openssl = "0.10"
 walkdir = "2"
 
 [dependencies.rsa]

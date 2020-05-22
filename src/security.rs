@@ -1,6 +1,6 @@
 use log::info;
 use rand::rngs::OsRng;
-use rsa::{PaddingScheme, PublicKey, RSAPrivateKey};
+use rsa::{PaddingScheme, RSAPrivateKey};
 use rsa_export::pem::EncodingScheme;
 use rsa_export::{pem, pkcs1};
 use std::convert::TryFrom;

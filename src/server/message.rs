@@ -1,27 +1,47 @@
 use actix::{AsyncContext, Handler};
-use launcher_api::message::{AuthMessage, ClientMessage, ServerMessage, AuthResponse, ProfileResourcesMessage, ProfileResourcesResponse};
 use launcher_api::message::ClientMessage::{Auth, ProfileResources};
+use launcher_api::message::{
+    AuthMessage, AuthResponse, ClientMessage, ProfileResourcesMessage, ProfileResourcesResponse,
+    ServerMessage,
+};
 use rand::Rng;
 use walkdir::WalkDir;
 
 use crate::config::auth::{AuthResult, Error};
-use launcher_api::message::Error as ServerError;
 use crate::server::websocket::WsApiSession;
+use launcher_api::message::Error as ServerError;
 
 impl Handler<AuthResult> for WsApiSession {
     type Result = ();
     fn handle(&mut self, msg: AuthResult, ctx: &mut Self::Context) -> Self::Result {
-        if msg.message.is_none() {
-            let mut rng = rand::thread_rng();
-            let digest = md5::compute(format!("{}{}{}", rng.gen_range(1000000000, 2147483647), rng.gen_range(1000000000, 2147483647), rng.gen_range(0, 9)));
-            let access_token = format!("{:x}", digest);
-            let auth = self.config.auth.get_provide();
-            let uuid = msg.uuid.unwrap();
-            ctx.text(serde_json::to_string(&ServerMessage::Auth(AuthResponse { uuid: uuid.to_string(), access_token: access_token.to_string() })).unwrap());
-            ctx.spawn(actix::fut::wrap_future(async move { auth.update_access_token(&uuid, &access_token.clone()).await; }));
-        } else {
-            let message = ServerMessage::Error(ServerError { msg: msg.message.unwrap()});
-            ctx.text(serde_json::to_string(&message).unwrap());
+        if let Ok(server) = self.launch_server.read() {
+            if msg.message.is_none() {
+                let mut rng = rand::thread_rng();
+                let digest = md5::compute(format!(
+                    "{}{}{}",
+                    rng.gen_range(1000000000, 2147483647),
+                    rng.gen_range(1000000000, 2147483647),
+                    rng.gen_range(0, 9)
+                ));
+                let access_token = format!("{:x}", digest);
+                let auth = server.config.auth.get_provide();
+                let uuid = msg.uuid.unwrap();
+                ctx.text(
+                    serde_json::to_string(&ServerMessage::Auth(AuthResponse {
+                        uuid: uuid.to_string(),
+                        access_token: access_token.to_string(),
+                    }))
+                    .unwrap(),
+                );
+                ctx.spawn(actix::fut::wrap_future(async move {
+                    auth.update_access_token(&uuid, &access_token.clone()).await;
+                }));
+            } else {
+                let message = ServerMessage::Error(ServerError {
+                    msg: msg.message.unwrap(),
+                });
+                ctx.text(serde_json::to_string(&message).unwrap());
+            }
         }
     }
 }
@@ -30,7 +50,7 @@ impl Handler<Error> for WsApiSession {
     type Result = ();
 
     fn handle(&mut self, msg: Error, ctx: &mut Self::Context) -> Self::Result {
-        let message = ServerMessage::Error(ServerError { msg: msg.message});
+        let message = ServerMessage::Error(ServerError { msg: msg.message });
         ctx.text(serde_json::to_string(&message).unwrap());
     }
 }
@@ -39,38 +59,45 @@ impl Handler<AuthMessage> for WsApiSession {
     type Result = ();
 
     fn handle(&mut self, msg: AuthMessage, ctx: &mut Self::Context) -> Self::Result {
-        let auth = self.config.auth.get_provide();
-        let ip = self.ip.clone();
-        let addr = ctx.address();
-        let password = self.config.security.decrypt(&msg.password);
-        ctx.spawn(actix::fut::wrap_future(async move {
-            let result = auth.auth(&msg.login, &password, &ip).await;
-            match result {
-                Ok(auth_result) => {
-                    addr.do_send(auth_result);
-                }
+        if let Ok(server) = self.launch_server.read() {
+            let auth = server.config.auth.get_provide();
+            let ip = self.ip.clone();
+            let addr = ctx.address();
+            let password = server.config.security.decrypt(&msg.password);
+            ctx.spawn(actix::fut::wrap_future(async move {
+                let result = auth.auth(&msg.login, &password, &ip).await;
+                match result {
+                    Ok(auth_result) => {
+                        addr.do_send(auth_result);
+                    }
 
-                Err(e) => {
-                    addr.do_send(e);
+                    Err(e) => {
+                        addr.do_send(e);
+                    }
                 }
-            }
-        }));
+            }));
+        }
     }
 }
 
 impl Handler<ProfileResourcesMessage> for WsApiSession {
     type Result = ();
     fn handle(&mut self, msg: ProfileResourcesMessage, ctx: &mut Self::Context) -> Self::Result {
-        if self.config.profiles.contains(&msg.profile) {
-            let list = WalkDir::new(format!("static/{}", msg.profile))
-                .into_iter()
-                .filter(|e| e.is_ok() && e.as_ref().ok().unwrap().metadata().unwrap().is_file())
-                .map(|e| e.ok().unwrap().path().display().to_string()).collect::<Vec<String>>();
-            let message = ServerMessage::ProfileResources(ProfileResourcesResponse{list});
-            ctx.text(serde_json::to_string(&message).unwrap());
-        } else {
-            let message = ServerMessage::Error(ServerError { msg: String::from("This profile doesn't exist!")});
-            ctx.text(serde_json::to_string(&message).unwrap());
+        if let Ok(server) = self.launch_server.read() {
+            if server.config.profiles.contains(&msg.profile) {
+                let list = WalkDir::new(format!("static/{}", msg.profile))
+                    .into_iter()
+                    .filter(|e| e.is_ok() && e.as_ref().ok().unwrap().metadata().unwrap().is_file())
+                    .map(|e| e.ok().unwrap().path().display().to_string())
+                    .collect::<Vec<String>>();
+                let message = ServerMessage::ProfileResources(ProfileResourcesResponse { list });
+                ctx.text(serde_json::to_string(&message).unwrap());
+            } else {
+                let message = ServerMessage::Error(ServerError {
+                    msg: String::from("This profile doesn't exist!"),
+                });
+                ctx.text(serde_json::to_string(&message).unwrap());
+            }
         }
     }
 }
