@@ -63,7 +63,7 @@ impl Handler<AuthMessage> for WsApiSession {
             let auth = server.config.auth.get_provide();
             let ip = self.ip.clone();
             let addr = ctx.address();
-            let password = server.config.security.decrypt(&msg.password);
+            let password = server.security.decrypt(&msg.password);
             ctx.spawn(actix::fut::wrap_future(async move {
                 let result = auth.auth(&msg.login, &password, &ip).await;
                 match result {

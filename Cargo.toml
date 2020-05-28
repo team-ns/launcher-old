@@ -27,15 +27,7 @@ actix-rt = "1.0.0"
 rustyline = "6.0.0"
 rustyline-derive = "=0.3.0"
 walkdir = "2"
-
-[dependencies.rsa]
-git = "https://github.com/RustCrypto/RSA"
-rev = "826ea300045a4c765b9047d2342bb710793d2fbe"
-features = ["pem"]
-
-[dependencies.rsa-export]
-git = "https://gitlab.com/nsl_team/rsa-export"
-features = ["pem"]
+ecies-ed25519 = "0.3"
 
 [profile.release]
 lto = true

@@ -16,7 +16,7 @@ pub async fn start(data: Data<RwLock<LaunchServer>>) -> std::io::Result<()> {
     let config = data.read().unwrap().config.clone();
     HttpServer::new(move || {
         App::new()
-            .data(data.clone())
+            .app_data(data.clone())
             // server
             .service(web::resource("/api/").to(websocket::api_route))
             .service(web::resource("/join").route(web::post().to(auth::join)))

@@ -4,7 +4,6 @@ use std::clone::Clone;
 
 use crate::config::auth::AuthProvide;
 use crate::config::AuthProvider::{Empty, JSON};
-use crate::security::SecurityManager;
 use crate::server::profile::get_profiles;
 
 pub(crate) mod auth;
@@ -16,8 +15,6 @@ pub struct Config {
     pub port: u32,
     pub auth: AuthProvider,
     pub texture: TextureProvider,
-    #[serde(skip)]
-    pub security: SecurityManager,
     #[serde(skip)]
     #[serde(default = "get_profiles")]
     pub profiles: Vec<String>,
@@ -59,7 +56,6 @@ impl Default for Config {
                 skin_url: "http://example.com/skin/{}.png".to_string(),
                 cape_url: "http://example.com/cape/{}.png".to_string(),
             },
-            security: SecurityManager::default(),
             profiles: get_profiles(),
         }
     }
