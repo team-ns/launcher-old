@@ -18,11 +18,7 @@ base64 = "0.12.1"
 web-view = "0.6.0"
 rust-embed="5.5.1"
 yarws = "0.2.0"
-
-[dependencies.rsa]
-git = "https://github.com/RustCrypto/RSA"
-rev = "826ea300045a4c765b9047d2342bb710793d2fbe"
-features = ["pem"]
+ecies-ed25519 = "0.3"
 
 [dependencies.tokio]
 version = "0.2.19"

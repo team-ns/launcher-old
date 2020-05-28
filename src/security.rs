@@ -1,26 +1,19 @@
+use ecies_ed25519::PublicKey;
 use rand::rngs::OsRng;
-use rsa::{PaddingScheme, PublicKey, RSAPublicKey};
-use std::convert::TryFrom;
 
 pub fn get_manager() -> SecurityManager {
-    let bytes = include_bytes!("../public_key");
     SecurityManager {
-        public_key: RSAPublicKey::try_from(
-            rsa::pem::parse(String::from_utf8_lossy(bytes).to_string()).unwrap(),
-        )
-        .unwrap(),
+        public_key: PublicKey::from_bytes(include_bytes!("../public_key")).unwrap(),
     }
 }
 
 pub struct SecurityManager {
-    public_key: RSAPublicKey,
+    public_key: PublicKey,
 }
 
 impl SecurityManager {
     pub fn encrypt(&self, text: &str) -> String {
-        let msg = self
-            .public_key
-            .encrypt(&mut OsRng, PaddingScheme::PKCS1v15, text.as_ref());
+        let msg = ecies_ed25519::encrypt(&self.public_key, text.as_bytes(), &mut OsRng);
         base64::encode(msg.unwrap())
     }
 }
