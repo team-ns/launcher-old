@@ -5,9 +5,9 @@ use std::path::Path;
 
 use crate::config::Config;
 use crate::security::SecurityManager;
-use actix_web::web::Data;
 use std::ops::Deref;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 mod commands;
 mod config;
@@ -31,15 +31,13 @@ impl LaunchServer {
             security: SecurityManager::default(),
         }
     }
-    async fn to_data(self) -> Data<RwLock<Self>> {
-        let server = Data::new(RwLock::new(self));
-        server
-    }
 }
 
-#[actix_rt::main]
+#[tokio::main]
 async fn main() -> std::io::Result<()> {
-    let data = LaunchServer::new().await.to_data().await;
-    commands::start(Arc::clone(data.deref()));
+    let data = Arc::new(RwLock::new(LaunchServer::new().await));
+    info!("Start command module...");
+    commands::start(data.clone()).await;
+    info!("Start websocket and http server...");
     server::start(data).await
 }

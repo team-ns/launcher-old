@@ -1,107 +1,37 @@
 use std::time::{Duration, Instant};
-
-use actix::{Actor, ActorContext, AsyncContext, StreamHandler};
-use actix_web::{web, Error, HttpRequest, HttpResponse};
-use actix_web_actors::ws;
-
+use log::error;
 use crate::LaunchServer;
+use futures::StreamExt;
+use launcher_api::message::ClientMessage;
+use serde::export::Result::Ok;
 use std::ops::Deref;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use warp::filters::ws::WebSocket;
 
 /// How often heartbeat pings are sent
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 /// How long before lack of client response causes a timeout
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub async fn api_route(
-    req: HttpRequest,
-    data: web::Data<RwLock<LaunchServer>>,
-    stream: web::Payload,
-) -> Result<HttpResponse, Error> {
-    let address = req.peer_addr();
-    if address.is_none() {
-        HttpResponse::BadRequest().await
-    } else {
-        ws::start(
-            WsApiSession {
-                hb: Instant::now(),
-                launch_server: Arc::clone(data.deref()),
-                ip: address.unwrap().ip().to_string(),
-            },
-            &req,
-            stream,
-        )
-    }
-}
-
-/// server connection is long running connection, it easier
-/// to handle with an actor
-pub struct WsApiSession {
-    /// Client must send ping at least once per 10 seconds (CLIENT_TIMEOUT),
-    /// otherwise we drop connection.
-    hb: Instant,
-    pub launch_server: Arc<RwLock<LaunchServer>>,
-    pub ip: String,
-}
-
-impl Actor for WsApiSession {
-    type Context = ws::WebsocketContext<Self>;
-
-    /// Method is called on actor start. We start the heartbeat process here.
-    fn started(&mut self, ctx: &mut Self::Context) {
-        self.hb(ctx);
-    }
-}
-
-impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsApiSession {
-    fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
-        // process server messages
-        println!("WS: {:?}", msg);
-        match msg {
-            Ok(ws::Message::Ping(msg)) => {
-                self.hb = Instant::now();
-                ctx.pong(&msg);
+pub async fn ws_api(ws: WebSocket, server: Arc<RwLock<LaunchServer>>) {
+    let (tx, mut rx) = ws.split();
+    while let Some(result) = rx.next().await {
+        let msg = match result {
+            Ok(msg) => msg,
+            Err(e) => {
+                error!("Websocket error");
+                break;
             }
-            Ok(ws::Message::Pong(_)) => {
-                self.hb = Instant::now();
-            }
-            Ok(ws::Message::Text(text)) => {
-                let mes: Result<launcher_api::message::ClientMessage, serde_json::error::Error> =
-                    serde_json::from_str(&text);
-
-                match mes {
-                    Ok(m) => ctx.address().do_send(m),
-                    Err(e) => println!("Error: {}", e),
+        };
+        if let Ok(json) = msg.to_str() {
+            if let Ok(message) = serde_json::from_str::<ClientMessage>(json) {
+                match message {
+                    ClientMessage::Auth(auth) => {}
+                    ClientMessage::Profiles(profiles) => {}
+                    ClientMessage::ProfileResources(resources) => {}
                 }
             }
-            Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
-            Ok(ws::Message::Close(_)) => {
-                ctx.stop();
-            }
-            _ => ctx.stop(),
         }
-    }
-}
-
-impl WsApiSession {
-    /// helper method that sends ping to client every second.
-    ///
-    /// also this method checks heartbeats from client
-    fn hb(&self, ctx: &mut <Self as Actor>::Context) {
-        ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
-            // check client heartbeats
-            if Instant::now().duration_since(act.hb) > CLIENT_TIMEOUT {
-                // heartbeat timed out
-                println!("Websocket Client heartbeat failed, disconnecting!");
-
-                // stop actor
-                ctx.stop();
-
-                // don't try to send a ping
-                return;
-            }
-
-            ctx.ping(b"");
-        });
     }
 }

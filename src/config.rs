@@ -2,9 +2,13 @@ use launcher_api::config::Configurable;
 use serde::{Deserialize, Serialize};
 use std::clone::Clone;
 
-use crate::config::auth::AuthProvide;
+use crate::config::auth::{AuthProvide, AuthResult, Entry};
 use crate::config::AuthProvider::{Empty, JSON};
 use crate::server::profile::get_profiles;
+use futures::TryFutureExt;
+use launcher_api::message::Error;
+use std::sync::Arc;
+use uuid::Uuid;
 
 pub(crate) mod auth;
 mod texture;
@@ -12,7 +16,6 @@ mod texture;
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Config {
     pub address: String,
-    pub port: u32,
     pub auth: AuthProvider,
     pub texture: TextureProvider,
     #[serde(skip)]
@@ -49,23 +52,133 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             workers: 3,
-            address: "127.0.0.1".to_string(),
-            port: 8080,
+            address: "127.0.0.1:8080".to_string(),
             auth: Empty,
             texture: TextureProvider {
-                skin_url: "http://example.com/skin/{}.png".to_string(),
-                cape_url: "http://example.com/cape/{}.png".to_string(),
+                skin_url: "http://example.com/skin/{username}.png".to_string(),
+                cape_url: "http://example.com/cape/{username}.png".to_string(),
             },
             profiles: get_profiles(),
         }
     }
 }
+
 pub struct None;
+
 impl AuthProvider {
-    pub fn get_provide<'a>(&'a self) -> Box<dyn AuthProvide> {
-        match self.clone() {
-            Empty => Box::new(None {}),
-            JSON(auth) => Box::new(auth),
+    pub async fn auth(
+        &self,
+        login: &String,
+        password: &String,
+        ip: &String,
+    ) -> Result<AuthResult, Error> {
+        match self {
+            Empty => Err(Error {
+                msg: "Cringe".to_string(),
+            }),
+            JSON(json) => {
+                let client = reqwest::Client::new();
+                let result = client
+                    .post(&json.auth_url)
+                    .json(&serde_json::json!({
+                        "username": login,
+                        "password": password,
+                        "ip": ip
+                    }))
+                    .send()
+                    .await
+                    .map_err(|_e| Error {
+                        msg: "Can't connect".to_string(),
+                    })?
+                    .json()
+                    .map_err(|_e| Error {
+                        msg: "Can't parse json".to_string(),
+                    })
+                    .await?;
+                Ok(result)
+            }
+        }
+    }
+
+    pub async fn get_entry(&self, uuid: &Uuid) -> Result<Entry, Error> {
+        match self {
+            Empty => Err(Error {
+                msg: "Cringe".to_string(),
+            }),
+            JSON(json) => {
+                let client = reqwest::Client::new();
+                Ok(client
+                    .post(&json.entry_url)
+                    .json(&serde_json::json!({ "uuid": uuid }))
+                    .send()
+                    .await
+                    .map_err(|_e| Error {
+                        msg: "Can't connect".to_string(),
+                    })?
+                    .json()
+                    .map_err(|_e| Error {
+                        msg: "Can't parse json".to_string(),
+                    })
+                    .await?)
+            }
+        }
+    }
+    pub async fn get_entry_from_name(&self, username: &String) -> Result<Entry, Error> {
+        match self {
+            Empty => Err(Error {
+                msg: "Cringe".to_string(),
+            }),
+            JSON(json) => {
+                let client = reqwest::Client::new();
+                Ok(client
+                    .post(&json.entry_url)
+                    .json(&serde_json::json!({ "username": username }))
+                    .send()
+                    .await
+                    .map_err(|_e| Error {
+                        msg: "Can't connect".to_string(),
+                    })?
+                    .json()
+                    .map_err(|_e| Error {
+                        msg: "Can't parse json".to_string(),
+                    })
+                    .await?)
+            }
+        }
+    }
+    pub async fn update_access_token(&self, uuid: &Uuid, token: &str) -> bool {
+        match self {
+            Empty => true,
+            JSON(json) => {
+                let client = reqwest::Client::new();
+                client
+                    .post(&json.update_access_token_url)
+                    .json(&serde_json::json!({
+                        "uuid": uuid,
+                        "accessToken": token
+                    }))
+                    .send()
+                    .await
+                    .unwrap()
+                    .status()
+                    .is_success()
+            }
+        }
+    }
+    pub async fn update_server_id(&self, uuid: &Uuid, server_id: &String) {
+        match self {
+            JSON(json) => {
+                let client = reqwest::Client::new();
+                let response = client
+                    .post(&json.update_server_id_url)
+                    .json(&serde_json::json!({
+                    "uuid": uuid,
+                    "serverId": server_id
+                    }))
+                    .send()
+                    .await;
+            }
+            _ => {}
         }
     }
 }

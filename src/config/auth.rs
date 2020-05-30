@@ -1,9 +1,7 @@
-use actix::prelude::Message;
-use actix_web::client::Client;
 use futures::TryFutureExt;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
+use reqwest::Client;
 use async_trait::async_trait;
 
 use crate::config::{JsonAuthProvider, None};
@@ -17,14 +15,12 @@ pub struct Entry {
     pub username: String,
 }
 
-#[derive(Deserialize, Serialize, Message)]
-#[rtype(result = "()")]
+#[derive(Deserialize, Serialize)]
 pub struct AuthResult {
     pub uuid: Option<Uuid>,
     pub message: Option<String>,
 }
-#[derive(Message)]
-#[rtype(result = "()")]
+
 pub struct Error {
     pub message: String,
 }
@@ -55,11 +51,12 @@ impl AuthProvide for JsonAuthProvider {
 
         let result = client
             .post(&self.auth_url)
-            .send_json(&serde_json::json!({
+            .json(&serde_json::json!({
                 "username": login,
                 "password": password,
                 "ip": ip
             }))
+            .send()
             .await
             .map_err(|_e| Error {
                 message: "Can't connect".to_string(),
@@ -76,7 +73,8 @@ impl AuthProvide for JsonAuthProvider {
         let client = Client::default();
         Ok(client
             .post(&self.entry_url)
-            .send_json(&serde_json::json!({ "uuid": uuid }))
+            .json(&serde_json::json!({ "uuid": uuid }))
+            .send()
             .await
             .map_err(|_e| Error {
                 message: "Can't connect".to_string(),
@@ -92,7 +90,8 @@ impl AuthProvide for JsonAuthProvider {
         let client = Client::default();
         Ok(client
             .post(&self.entry_url)
-            .send_json(&serde_json::json!({ "username": username }))
+            .json(&serde_json::json!({ "username": username }))
+            .send()
             .await
             .map_err(|_e| Error {
                 message: "Can't connect".to_string(),
@@ -108,10 +107,11 @@ impl AuthProvide for JsonAuthProvider {
         let client = Client::default();
         let response = client
             .post(&self.update_access_token_url)
-            .send_json(&serde_json::json!({
+            .json(&serde_json::json!({
                 "uuid": uuid,
                 "accessToken": token
             }))
+            .send()
             .await;
     }
 
@@ -119,10 +119,11 @@ impl AuthProvide for JsonAuthProvider {
         let client = Client::default();
         let response = client
             .post(&self.update_server_id_url)
-            .send_json(&serde_json::json!({
+            .json(&serde_json::json!({
             "uuid": uuid,
             "serverId": server_id
             }))
+            .send()
             .await;
     }
 }

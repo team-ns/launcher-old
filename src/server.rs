@@ -1,36 +1,41 @@
-use actix_files as fs;
-use actix_web::App;
-use actix_web::{web, HttpServer};
+use std::sync::Arc;
 
+use futures::TryFutureExt;
+use futures::{FutureExt, StreamExt};
+use tokio::sync::RwLock;
+use warp::Filter;
+
+use crate::server::auth::{has_join, join, HasJoinRequest};
+use crate::server::websocket::ws_api;
 use crate::LaunchServer;
-use actix_web::middleware::Logger;
-use actix_web::web::Data;
-use std::sync::RwLock;
+use std::net::SocketAddr;
+use std::str::FromStr;
 
 mod auth;
-mod message;
 pub mod profile;
 mod websocket;
 
-pub async fn start(data: Data<RwLock<LaunchServer>>) -> std::io::Result<()> {
-    let config = data.read().unwrap().config.clone();
-    HttpServer::new(move || {
-        App::new()
-            .app_data(data.clone())
-            // server
-            .service(web::resource("/api/").to(websocket::api_route))
-            .service(web::resource("/join").route(web::post().to(auth::join)))
-            .service(web::resource("/hasJoined").route(web::get().to(auth::has_join)))
-            // static resources
-            .service(
-                fs::Files::new("/static", "static/")
-                    .show_files_listing()
-                    .use_last_modified(true),
-            )
-            .wrap(Logger::default())
-    })
-    .workers(config.workers)
-    .bind(format!("{}:{}", config.address, config.port))?
-    .run()
-    .await
+pub async fn start(data: Arc<RwLock<LaunchServer>>) -> std::io::Result<()> {
+    let config = data.read().await.config.clone();
+    let data = warp::any().map(move || data.clone());
+    let dir = warp::path("files").and(warp::fs::dir("static"));
+    let ws = warp::path("api")
+        .and(warp::ws())
+        .and(data.clone())
+        .map(|ws: warp::ws::Ws, launcher| ws.on_upgrade(move |socket| ws_api(socket, launcher)));
+    let join = warp::path("join")
+        .and(warp::post())
+        .and(warp::body::json())
+        .and(data.clone())
+        .and_then(join);
+    let has_joined = warp::path("hasJoined")
+        .and(warp::get())
+        .and(warp::query::<HasJoinRequest>())
+        .and(data.clone())
+        .and_then(has_join);
+    let routes = dir.or(ws).or(join).or(has_joined);
+    warp::serve(routes)
+        .run(SocketAddr::from_str(&config.address).unwrap())
+        .await;
+    Ok(())
 }

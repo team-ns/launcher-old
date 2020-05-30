@@ -10,14 +10,14 @@ impl TextureProvider {
     pub fn get_skin_url(&self, entry: &Entry) -> Option<String> {
         let mut vars = HashMap::new();
         vars.insert("username".to_string(), entry.username.to_string());
-        vars.insert("job".to_string(), entry.uuid.to_string());
+        vars.insert("uuid".to_string(), entry.uuid.to_string());
         Some((&self.skin_url.format(&vars).unwrap()).to_string())
     }
 
     pub fn get_cape_url(&self, entry: &Entry) -> Option<String> {
         let mut vars = HashMap::new();
         vars.insert("username".to_string(), entry.username.to_string());
-        vars.insert("job".to_string(), entry.uuid.to_string());
+        vars.insert("uuid".to_string(), entry.uuid.to_string());
         Some((&self.cape_url.format(&vars).unwrap()).to_string())
     }
 

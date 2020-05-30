@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::process::exit;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::thread;
 
 use rustyline::completion::{extract_word, Completer};
@@ -8,10 +8,14 @@ use rustyline::error::ReadlineError;
 use rustyline::Config as LineConfig;
 use rustyline::{CompletionType, Context, EditMode, Editor, OutputStreamType};
 use rustyline_derive::{Helper, Highlighter, Hinter, Validator};
+use tokio::sync::RwLock;
 
+use crate::config::Config;
 use crate::LaunchServer;
+use std::future::Future;
+use std::ops::DerefMut;
 
-type CmdFn = Box<dyn Fn(&mut LaunchServer, &[&str])>;
+type CmdFn = Box<dyn Fn(&mut LaunchServer, &[&str]) -> () + Send + Sync>;
 
 struct Command {
     name: String,
@@ -69,18 +73,22 @@ impl CommandHelper {
         }
     }
 
-    pub fn eval(&mut self, command: String) {
+    pub async fn eval(&mut self, command: String) {
         let args: Vec<&str> = command.split(' ').collect();
         let selected_command = self.commands.get(&args[0].to_string());
         match selected_command {
             None => println!("Command not found. Use help."),
-            Some(c) => (c.func)(&mut *self.server.write().unwrap(), &args[1..]),
+            Some(c) => {
+                let args = &args[1..];
+                let mut server = self.server.write().await;
+                (c.func)(server.deref_mut(), args);
+            }
         }
     }
 
     pub fn new_command<F>(&mut self, name: &str, description: &str, command: F)
     where
-        F: Fn(&mut LaunchServer, &[&str]) + 'static,
+        F: Fn(&mut LaunchServer, &[&str]) + Send + Sync + 'static,
     {
         self.commands.insert(
             name.to_string(),
@@ -89,8 +97,8 @@ impl CommandHelper {
     }
 }
 
-pub fn start(server: Arc<RwLock<LaunchServer>>) {
-    thread::spawn(move || {
+pub async fn start(server: Arc<RwLock<LaunchServer>>) {
+    tokio::spawn(async move {
         let rl_config = LineConfig::builder()
             .history_ignore_space(true)
             .completion_type(CompletionType::List)
@@ -108,7 +116,8 @@ pub fn start(server: Arc<RwLock<LaunchServer>>) {
                     rl.add_history_entry(line.as_str());
                     rl.helper_mut()
                         .unwrap()
-                        .eval(line.trim_end_matches("\n").to_string());
+                        .eval(line.trim_end_matches("\n").to_string())
+                        .await;
                 }
                 Err(ReadlineError::Interrupted) => {
                     println!("Bye");
@@ -121,9 +130,11 @@ pub fn start(server: Arc<RwLock<LaunchServer>>) {
 }
 
 fn register_command(helper: &mut CommandHelper) {
-    helper.new_command("some", "some command", some_command);
+    //helper.new_command("some", "some command", some_command);
 }
+/*
 
-fn some_command(server: &mut LaunchServer, args: &[&str]) {
+async fn some_command( server: LaunchServer, args: &[&str]) {
     println!("Test:  {:#?}", args)
 }
+*/
