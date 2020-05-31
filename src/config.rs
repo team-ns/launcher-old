@@ -5,7 +5,6 @@ use std::clone::Clone;
 use crate::config::auth::{AuthProvide, AuthResult, Entry};
 use crate::config::AuthProvider::{Empty, JSON};
 use crate::server::profile::get_profiles;
-use futures::TryFutureExt;
 use launcher_api::message::Error;
 use uuid::Uuid;
 
@@ -65,12 +64,7 @@ impl Default for Config {
 pub struct None;
 
 impl AuthProvider {
-    pub async fn auth(
-        &self,
-        login: &str,
-        password: &str,
-        ip: &str,
-    ) -> Result<AuthResult, Error> {
+    pub async fn auth(&self, login: &str, password: &str, ip: &str) -> Result<AuthResult, Error> {
         match self {
             Empty => Err(Error {
                 msg: "Cringe".to_string(),
@@ -107,7 +101,7 @@ impl AuthProvider {
             }),
             JSON(json) => {
                 json.get_entry(uuid).await
-               /* let client = reqwest::Client::new();
+                /* let client = reqwest::Client::new();
                 Ok(client
                     .post(&json.entry_url)
                     .json(&serde_json::json!({ "uuid": uuid }))
@@ -168,11 +162,11 @@ impl AuthProvider {
             }
         }
     }
-    pub async fn update_server_id(&self, uuid: &Uuid, server_id: &str) -> bool{
+    pub async fn update_server_id(&self, uuid: &Uuid, server_id: &str) -> bool {
         match self {
             JSON(json) => {
                 json.update_server_id(uuid, server_id).await
-               /* let client = reqwest::Client::new();
+                /* let client = reqwest::Client::new();
                 let response = client
                     .post(&json.update_server_id_url)
                     .json(&serde_json::json!({
@@ -182,9 +176,7 @@ impl AuthProvider {
                     .send()
                     .await;*/
             }
-            Empty => {
-                false
-            }
+            Empty => false,
         }
     }
 }

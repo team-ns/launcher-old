@@ -24,12 +24,7 @@ pub struct AuthResult {
 
 #[async_trait]
 pub trait AuthProvide {
-    async fn auth(
-        &self,
-        login: &str,
-        password: &str,
-        ip: &str,
-    ) -> Result<AuthResult, Error>;
+    async fn auth(&self, login: &str, password: &str, ip: &str) -> Result<AuthResult, Error>;
     async fn get_entry(&self, uuid: &Uuid) -> Result<Entry, Error>;
     async fn get_entry_from_name(&self, username: &str) -> Result<Entry, Error>;
     async fn update_access_token(&self, uuid: &Uuid, token: &str) -> bool;
@@ -38,12 +33,7 @@ pub trait AuthProvide {
 
 #[async_trait]
 impl AuthProvide for JsonAuthProvider {
-    async fn auth(
-        &self,
-        login: &str,
-        password: &str,
-        ip: &str,
-    ) -> Result<AuthResult, Error> {
+    async fn auth(&self, login: &str, password: &str, ip: &str) -> Result<AuthResult, Error> {
         let client = Client::default();
 
         let result = client

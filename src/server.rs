@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use futures::{FutureExt, StreamExt};
 use tokio::sync::RwLock;
 use warp::Filter;
 
@@ -21,7 +20,11 @@ pub async fn start(data: Arc<RwLock<LaunchServer>>) -> std::io::Result<()> {
     let ws = warp::path("api")
         .and(warp::ws())
         .and(data.clone())
-        .map(|ws: warp::ws::Ws, launcher| ws.on_upgrade(move |socket| ws_api(socket, launcher)));
+        .and(warp::addr::remote())
+        .map(|ws: warp::ws::Ws, launcher, addr: Option<SocketAddr>| {
+            println!("remote address = {:?}", addr);
+            ws.on_upgrade(move |socket| ws_api(socket, launcher))
+        });
     let join = warp::path("join")
         .and(warp::post())
         .and(warp::body::json())
