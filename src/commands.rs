@@ -1,7 +1,7 @@
 use std::collections::HashMap;
+use std::ops::DerefMut;
 use std::process::exit;
 use std::sync::Arc;
-use std::thread;
 
 use rustyline::completion::{extract_word, Completer};
 use rustyline::error::ReadlineError;
@@ -10,10 +10,7 @@ use rustyline::{CompletionType, Context, EditMode, Editor, OutputStreamType};
 use rustyline_derive::{Helper, Highlighter, Hinter, Validator};
 use tokio::sync::RwLock;
 
-use crate::config::Config;
 use crate::LaunchServer;
-use std::future::Future;
-use std::ops::DerefMut;
 
 type CmdFn = Box<dyn Fn(&mut LaunchServer, &[&str]) -> () + Send + Sync>;
 
@@ -130,11 +127,9 @@ pub async fn start(server: Arc<RwLock<LaunchServer>>) {
 }
 
 fn register_command(helper: &mut CommandHelper) {
-    //helper.new_command("some", "some command", some_command);
+    helper.new_command("some", "some command", some_command);
 }
-/*
 
-async fn some_command( server: LaunchServer, args: &[&str]) {
+fn some_command(server: &mut LaunchServer, args: &[&str]) {
     println!("Test:  {:#?}", args)
 }
-*/

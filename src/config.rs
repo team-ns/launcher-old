@@ -7,7 +7,6 @@ use crate::config::AuthProvider::{Empty, JSON};
 use crate::server::profile::get_profiles;
 use futures::TryFutureExt;
 use launcher_api::message::Error;
-use std::sync::Arc;
 use uuid::Uuid;
 
 pub(crate) mod auth;
@@ -68,16 +67,17 @@ pub struct None;
 impl AuthProvider {
     pub async fn auth(
         &self,
-        login: &String,
-        password: &String,
-        ip: &String,
+        login: &str,
+        password: &str,
+        ip: &str,
     ) -> Result<AuthResult, Error> {
         match self {
             Empty => Err(Error {
                 msg: "Cringe".to_string(),
             }),
             JSON(json) => {
-                let client = reqwest::Client::new();
+                json.auth(login, password, ip).await
+                /*let client = reqwest::Client::new();
                 let result = client
                     .post(&json.auth_url)
                     .json(&serde_json::json!({
@@ -95,7 +95,7 @@ impl AuthProvider {
                         msg: "Can't parse json".to_string(),
                     })
                     .await?;
-                Ok(result)
+                Ok(result)*/
             }
         }
     }
@@ -106,7 +106,8 @@ impl AuthProvider {
                 msg: "Cringe".to_string(),
             }),
             JSON(json) => {
-                let client = reqwest::Client::new();
+                json.get_entry(uuid).await
+               /* let client = reqwest::Client::new();
                 Ok(client
                     .post(&json.entry_url)
                     .json(&serde_json::json!({ "uuid": uuid }))
@@ -119,17 +120,18 @@ impl AuthProvider {
                     .map_err(|_e| Error {
                         msg: "Can't parse json".to_string(),
                     })
-                    .await?)
+                    .await?)*/
             }
         }
     }
-    pub async fn get_entry_from_name(&self, username: &String) -> Result<Entry, Error> {
+    pub async fn get_entry_from_name(&self, username: &str) -> Result<Entry, Error> {
         match self {
             Empty => Err(Error {
                 msg: "Cringe".to_string(),
             }),
             JSON(json) => {
-                let client = reqwest::Client::new();
+                json.get_entry_from_name(username).await
+                /*let client = reqwest::Client::new();
                 Ok(client
                     .post(&json.entry_url)
                     .json(&serde_json::json!({ "username": username }))
@@ -142,7 +144,7 @@ impl AuthProvider {
                     .map_err(|_e| Error {
                         msg: "Can't parse json".to_string(),
                     })
-                    .await?)
+                    .await?)*/
             }
         }
     }
@@ -150,7 +152,8 @@ impl AuthProvider {
         match self {
             Empty => true,
             JSON(json) => {
-                let client = reqwest::Client::new();
+                json.update_access_token(uuid, token).await
+                /*let client = reqwest::Client::new();
                 client
                     .post(&json.update_access_token_url)
                     .json(&serde_json::json!({
@@ -161,14 +164,15 @@ impl AuthProvider {
                     .await
                     .unwrap()
                     .status()
-                    .is_success()
+                    .is_success()*/
             }
         }
     }
-    pub async fn update_server_id(&self, uuid: &Uuid, server_id: &String) {
+    pub async fn update_server_id(&self, uuid: &Uuid, server_id: &str) -> bool{
         match self {
             JSON(json) => {
-                let client = reqwest::Client::new();
+                json.update_server_id(uuid, server_id).await
+               /* let client = reqwest::Client::new();
                 let response = client
                     .post(&json.update_server_id_url)
                     .json(&serde_json::json!({
@@ -176,9 +180,11 @@ impl AuthProvider {
                     "serverId": server_id
                     }))
                     .send()
-                    .await;
+                    .await;*/
             }
-            _ => {}
+            Empty => {
+                false
+            }
         }
     }
 }

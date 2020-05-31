@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use futures::TryFutureExt;
 use futures::{FutureExt, StreamExt};
 use tokio::sync::RwLock;
 use warp::Filter;

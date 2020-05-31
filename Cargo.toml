@@ -16,7 +16,7 @@ tokio = { version = "*", features = ["full"]}
 async-trait = "0.1.24"
 rand="0.7.3"
 reqwest = {version = "0.10.6", features = ["json"]}
-env_logger = "0.7.1"
+pretty_env_logger = "0.3"
 log = "0.4.8"
 strfmt = "0.1.6"
 md5 = "0.7.0"
