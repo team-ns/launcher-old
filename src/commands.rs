@@ -1,15 +1,19 @@
-use std::collections::HashMap;
-use std::ops::DerefMut;
-use std::process::exit;
-use std::sync::Arc;
-
+use launcher_api::profile::Profile;
 use rustyline::completion::{extract_word, Completer};
 use rustyline::error::ReadlineError;
 use rustyline::Config as LineConfig;
 use rustyline::{CompletionType, Context, EditMode, Editor, OutputStreamType};
 use rustyline_derive::{Helper, Highlighter, Hinter, Validator};
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::Read;
+use std::ops::DerefMut;
+use std::process::exit;
+use std::sync::Arc;
 use tokio::sync::RwLock;
+use walkdir::{DirEntry, WalkDir};
 
+use crate::server::profile::{HashedFile, HashedProfile};
 use crate::LaunchServer;
 
 type CmdFn = Box<dyn Fn(&mut LaunchServer, &[&str]) -> () + Send + Sync>;
@@ -127,9 +131,126 @@ pub async fn start(server: Arc<RwLock<LaunchServer>>) {
 }
 
 fn register_command(helper: &mut CommandHelper) {
-    helper.new_command("some", "some command", some_command);
+    helper.new_command("rehash", "Update checksum of profile files", rehash);
 }
 
-fn some_command(server: &mut LaunchServer, args: &[&str]) {
-    println!("Test:  {:#?}", args)
+fn rehash(server: &mut LaunchServer, args: &[&str]) {
+    //duplicate files map
+    let mut hashed_libs = HashMap::new();
+    let mut hashed_natives = HashMap::new();
+
+    //hashed profiles
+    let mut hashed_profiles: HashMap<String, HashedProfile> = HashMap::new();
+
+    //profile list
+    let profiles: Vec<Profile> = WalkDir::new("static/profiles")
+        .min_depth(2)
+        .max_depth(3)
+        .into_iter()
+        .filter(|e| {
+            e.is_ok() && {
+                let e = e.as_ref().ok().unwrap();
+                e.metadata().unwrap().is_file()
+                    && e.file_name().to_str().unwrap().eq("profile.json")
+            }
+        })
+        .map(|e| serde_json::from_reader(File::open(e.unwrap().into_path()).unwrap()).unwrap())
+        .collect();
+
+    fn fill_map(iter: impl Iterator<Item = DirEntry>, map: &mut HashMap<String, HashedFile>) {
+        for file in iter {
+            let path = file.path();
+            let (checksum, len) = {
+                let mut buffer = Vec::new();
+                File::open(path).unwrap().read_to_end(&mut buffer);
+                (
+                    t1ha::t1ha2_atonce128(buffer.as_slice(), 1),
+                    buffer.len() as u64,
+                )
+            };
+
+            let strip_path = String::from(path.strip_prefix("static/").unwrap().to_str().unwrap());
+
+            map.insert(strip_path, HashedFile { len, checksum });
+        }
+    }
+
+    //fill duplicate map
+    let lib_iter = WalkDir::new("static/libs")
+        .min_depth(1)
+        .into_iter()
+        .filter(|e| e.is_ok() && e.as_ref().ok().unwrap().metadata().unwrap().is_file())
+        .map(|e| e.ok().unwrap())
+        .into_iter();
+    fill_map(lib_iter, &mut hashed_libs);
+
+    //fill native list
+    let native_versions = WalkDir::new("static/natives")
+        .min_depth(1)
+        .max_depth(2)
+        .into_iter()
+        .filter(|e| e.is_ok() && e.as_ref().ok().unwrap().metadata().unwrap().is_dir())
+        .map(|e| e.ok().unwrap())
+        .into_iter();
+
+    for version in native_versions {
+        let mut hashed_native = HashMap::new();
+
+        let native_iter = WalkDir::new(version.path())
+            .min_depth(1)
+            .into_iter()
+            .filter(|e| e.is_ok() && e.as_ref().ok().unwrap().metadata().unwrap().is_file())
+            .map(|e| e.ok().unwrap())
+            .into_iter();
+        fill_map(native_iter, &mut hashed_native);
+
+        hashed_natives.insert(
+            String::from(
+                version
+                    .path()
+                    .strip_prefix("static/natives/")
+                    .unwrap()
+                    .to_str()
+                    .unwrap(),
+            ),
+            hashed_native,
+        );
+    }
+
+    for profile in &profiles {
+        //create profiles and hash non duplicate files
+        let mut hashed_profile = HashedProfile::new();
+
+        let file_iter = WalkDir::new(format!("static/profiles/{}", profile.name))
+            .min_depth(1)
+            .into_iter()
+            .filter(|e| e.is_ok() && e.as_ref().ok().unwrap().metadata().unwrap().is_file())
+            .map(|e| e.ok().unwrap())
+            .into_iter();
+        fill_map(file_iter, &mut hashed_profile);
+
+        //fill libs from duplicate map
+        for lib in &profile.libraries {
+            //TODO fix possible error with sync
+            let lib = format!("libs/{}", lib);
+            hashed_profile.insert(lib.clone(), hashed_libs.get(&lib).unwrap().clone());
+        }
+        //fill natives from natives map
+        for native in hashed_natives.get(&profile.version).unwrap() {
+            hashed_profile.insert(String::from(native.0), native.1.clone());
+        }
+        hashed_profiles.insert(String::from(&profile.name), hashed_profile);
+    }
+
+    server.security.profiles = hashed_profiles;
+
+    for profile in &server.security.profiles {
+        println!("Profile: {}", profile.0);
+        for hashed_file in profile.1 {
+            println!(
+                "Name: {} \nSize: {} \nChecksum: {} \n",
+                hashed_file.0, hashed_file.1.len, hashed_file.1.checksum
+            );
+        }
+    }
 }

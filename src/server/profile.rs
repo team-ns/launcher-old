@@ -1,4 +1,20 @@
+use std::collections::HashMap;
 use walkdir::WalkDir;
+
+#[derive(Clone)]
+pub struct HashedFile {
+    pub len: u64,
+    pub checksum: u128,
+}
+
+/*pub struct HashedProfile {
+    pub name: String,
+    pub libraries: Vec<HashedFile>,
+    pub classpath: Vec<HashedFile>,
+    pub mods: Vec<HashedFile>,
+}*/
+
+pub type HashedProfile = HashMap<String, HashedFile>;
 
 pub fn get_profiles() -> Vec<String> {
     WalkDir::new("static")

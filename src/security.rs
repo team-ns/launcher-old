@@ -1,12 +1,15 @@
+use crate::server::profile::HashedProfile;
 use ecies_ed25519::SecretKey;
 use log::info;
 use rand::rngs::OsRng;
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{prelude::*, Result};
 use std::path::Path;
 
 pub struct SecurityManager {
     pub secret_key: SecretKey,
+    pub profiles: HashMap<String, HashedProfile>,
 }
 
 impl Default for SecurityManager {
@@ -24,6 +27,7 @@ impl Default for SecurityManager {
             .unwrap();
         SecurityManager {
             secret_key: SecretKey::from_bytes(&bytes).expect("Failed to parse key!"),
+            profiles: HashMap::new(),
         }
     }
 }
