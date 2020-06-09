@@ -17,11 +17,16 @@ pub async fn start(data: Arc<RwLock<LaunchServer>>) -> std::io::Result<()> {
     let config = data.read().await.config.clone();
     let data = warp::any().map(move || data.clone());
     let dir = warp::path("files").and(warp::fs::dir("static"));
+    let client_ip = warp::header("x-real-ip")
+        .or(warp::header("x-forwarded-for"))
+        .unify()
+        .or(warp::addr::remote().map(|addr: Option<SocketAddr>| addr.expect("Ip not found")))
+        .unify();
     let ws = warp::path("api")
         .and(warp::ws())
         .and(data.clone())
-        .and(warp::addr::remote())
-        .map(|ws: warp::ws::Ws, launcher, addr: Option<SocketAddr>| {
+        .and(client_ip)
+        .map(|ws: warp::ws::Ws, launcher, addr: SocketAddr| {
             println!("remote address = {:?}", addr);
             ws.on_upgrade(move |socket| ws_api(socket, launcher))
         });

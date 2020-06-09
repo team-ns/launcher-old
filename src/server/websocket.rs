@@ -5,7 +5,7 @@ use launcher_api::message::{
     AuthMessage, AuthResponse, ClientMessage, Error, ProfileResourcesMessage,
     ProfileResourcesResponse, ProfilesMessage, ServerMessage,
 };
-use log::error;
+use log::{error, info};
 use rand::Rng;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::{mpsc, RwLock};
@@ -13,6 +13,13 @@ use warp::filters::ws::{Message, WebSocket};
 
 use crate::LaunchServer;
 use walkdir::WalkDir;
+pub struct Client {}
+
+impl Client {
+    fn new() -> Self {
+        Client {}
+    }
+}
 
 pub async fn ws_api(ws: WebSocket, server: Arc<RwLock<LaunchServer>>) {
     let (ws_tx, mut ws_rx) = ws.split();
@@ -22,6 +29,7 @@ pub async fn ws_api(ws: WebSocket, server: Arc<RwLock<LaunchServer>>) {
             error!("Websocket send error: {}", e);
         }
     }));
+    let mut client = Client::new();
     while let Some(result) = ws_rx.next().await {
         let msg = match result {
             Ok(msg) => msg,
@@ -34,13 +42,17 @@ pub async fn ws_api(ws: WebSocket, server: Arc<RwLock<LaunchServer>>) {
             if let Ok(message) = serde_json::from_str::<ClientMessage>(json) {
                 match message {
                     ClientMessage::Auth(auth) => {
-                        auth.handle(tx.clone(), server.clone()).await;
+                        auth.handle(tx.clone(), server.clone(), &mut client).await;
                     }
                     ClientMessage::Profiles(profiles) => {
-                        profiles.handle(tx.clone(), server.clone()).await;
+                        profiles
+                            .handle(tx.clone(), server.clone(), &mut client)
+                            .await;
                     }
                     ClientMessage::ProfileResources(resources) => {
-                        resources.handle(tx.clone(), server.clone()).await;
+                        resources
+                            .handle(tx.clone(), server.clone(), &mut client)
+                            .await;
                     }
                 }
             }
@@ -54,6 +66,7 @@ pub trait Handle {
         &self,
         tx: UnboundedSender<Result<Message, warp::Error>>,
         server: Arc<RwLock<LaunchServer>>,
+        client: &mut Client,
     );
 }
 
@@ -63,6 +76,7 @@ impl Handle for ProfileResourcesMessage {
         &self,
         tx: UnboundedSender<Result<Message, warp::Error>>,
         server: Arc<RwLock<LaunchServer>>,
+        client: &mut Client,
     ) {
         let server = server.read().await;
         if server.config.profiles.contains(&self.profile) {
@@ -88,6 +102,7 @@ impl Handle for ProfilesMessage {
         &self,
         tx: UnboundedSender<Result<Message, warp::Error>>,
         server: Arc<RwLock<LaunchServer>>,
+        client: &mut Client,
     ) {
         unimplemented!()
     }
@@ -99,6 +114,7 @@ impl Handle for AuthMessage {
         &self,
         tx: UnboundedSender<Result<Message, warp::Error>>,
         server: Arc<RwLock<LaunchServer>>,
+        client: &mut Client,
     ) {
         let server = server.read().await;
         //TODO ADD IP FOR LIMITERS

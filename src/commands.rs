@@ -88,8 +88,8 @@ impl CommandHelper {
     }
 
     pub fn new_command<F>(&mut self, name: &str, description: &str, command: F)
-        where
-            F: Fn(&mut LaunchServer, &[&str]) + Send + Sync + 'static,
+    where
+        F: Fn(&mut LaunchServer, &[&str]) + Send + Sync + 'static,
     {
         self.commands.insert(
             name.to_string(),
@@ -149,15 +149,13 @@ fn rehash(server: &mut LaunchServer, args: &[&str]) {
         .into_iter()
         .flat_map(|v| v.ok())
         .filter(|e| {
-            e.metadata().map(|m| m.is_file()).unwrap_or(false) &&
-                e.file_name().eq("profile.json")
+            e.metadata().map(|m| m.is_file()).unwrap_or(false) && e.file_name().eq("profile.json")
         })
         .flat_map(|e| File::open(e.into_path()).ok())
         .flat_map(|f| serde_json::from_reader(f).ok())
         .collect();
 
-
-    fn fill_map(iter: impl Iterator<Item=DirEntry>, map: &mut HashMap<String, HashedFile>) {
+    fn fill_map(iter: impl Iterator<Item = DirEntry>, map: &mut HashMap<String, HashedFile>) {
         for file in iter {
             let path = file.path();
             let (checksum, len) = {
@@ -225,7 +223,7 @@ fn rehash(server: &mut LaunchServer, args: &[&str]) {
             .min_depth(1)
             .into_iter()
             .flat_map(|e| e.ok())
-            .filter(|e|e.metadata().map(|m| m.is_file()).unwrap_or(false))
+            .filter(|e| e.metadata().map(|m| m.is_file()).unwrap_or(false))
             .into_iter();
         fill_map(file_iter, &mut hashed_profile);
 

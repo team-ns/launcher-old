@@ -19,7 +19,7 @@ pub struct LaunchServer {
 
 impl LaunchServer {
     async fn new() -> Self {
-        pretty_env_logger::formatted_builder()
+        env_logger::builder()
             .filter_module("rustyline", log::LevelFilter::Info)
             .filter_level(log::LevelFilter::Debug)
             .init();
