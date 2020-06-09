@@ -1,13 +1,16 @@
-use rust_embed::RustEmbed;
-
-use crate::client::WebSocketClient;
 use std::cell::RefCell;
 use std::sync::Arc;
+
+use rust_embed::RustEmbed;
 use tokio::runtime::{Handle, Runtime};
 use tokio::sync::Mutex;
 use web_view::{Content, WVResult};
 
-mod resources;
+use messages::RuntimeMessage;
+
+use crate::client::WebSocketClient;
+
+mod messages;
 
 #[derive(RustEmbed)]
 #[folder = "runtime/"]
@@ -33,23 +36,34 @@ pub async fn start() {
     let mut webview = web_view::builder()
         .title("NSLauncher")
         .content(Content::Html(&resources))
-        .size(800, 600)
+        .size(1000, 600)
         .resizable(false)
         .debug(true)
         .user_data(())
         .invoke_handler(move |view, arg| {
             let handler = view.handle();
-            println!("хто");
             let mut socket = Arc::clone(&socket);
-            tokio::spawn(async move {
-                let mut value = socket.lock().await;
-                if (*value).auth("Test", "test").await.is_ok() {
-                    handler.dispatch(|w| {
-                        w.eval("result()");
-                        Ok(())
+            println!("{}", arg);
+            let message: RuntimeMessage = serde_json::from_str(arg).unwrap();
+            match message {
+                RuntimeMessage::Login { login, password } => {
+                    println!("who");
+                    tokio::spawn(async move {
+                        let mut value = socket.lock().await;
+                        let result = value.auth(&login, &password).await;
+                        if result.is_ok() {
+                            handler.dispatch(|w| {
+                                w.eval("app.backend.logined()");
+                                let result = result.ok().unwrap();
+                                println!("{}, {}", &result.access_token, &result.uuid);
+                                Ok(())
+                            });
+                        }
                     });
                 }
-            });
+                RuntimeMessage::Play { profile } => {}
+            }
+
             Ok(())
         })
         .build()
