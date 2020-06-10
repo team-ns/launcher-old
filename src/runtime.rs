@@ -8,7 +8,10 @@ use web_view::{Content, WVResult};
 
 use messages::RuntimeMessage;
 
-use crate::client::WebSocketClient;
+use crate::client::{Client, AuthInfo};
+use crate::config::Config;
+use crate::game;
+use launcher_api::config::Configurable;
 
 mod messages;
 
@@ -17,7 +20,7 @@ mod messages;
 struct Asset;
 
 struct Handler {
-    ws: WebSocketClient,
+    ws: Client,
 }
 
 impl Handler {
@@ -27,8 +30,8 @@ impl Handler {
 }
 
 pub async fn start() {
-    let mut socket: Arc<Mutex<WebSocketClient>> = Arc::new(Mutex::new(
-        WebSocketClient::new("ws://127.0.0.1:8080/api/").await,
+    let mut socket: Arc<Mutex<Client>> = Arc::new(Mutex::new(
+        Client::new("ws://127.0.0.1:8080/api/").await,
     ));
     let resources = std::str::from_utf8(&Asset::get("index.html").unwrap().to_mut())
         .unwrap()
@@ -52,16 +55,30 @@ pub async fn start() {
                         let mut value = socket.lock().await;
                         let result = value.auth(&login, &password).await;
                         if result.is_ok() {
+                            let result = result.ok().unwrap();
+                            value.auth_info = Some(AuthInfo {
+                                access_token: result.access_token,
+                                uuid: result.uuid,
+                                username: login,
+                            });
                             handler.dispatch(|w| {
                                 w.eval("app.backend.logined()");
-                                let result = result.ok().unwrap();
-                                println!("{}, {}", &result.access_token, &result.uuid);
                                 Ok(())
                             });
                         }
                     });
                 }
-                RuntimeMessage::Play { profile } => {}
+                RuntimeMessage::Play { profile } => {
+                    tokio::spawn(async move {
+                        let launcher = socket.lock().await;
+                        handler.dispatch(|w| {
+                            w.exit();
+                            Ok(())
+                        });
+                        let client = game::Client { name: profile };
+                        game::Client::start(&client, &launcher.config.game_dir, &launcher.auth_info.as_ref().unwrap().uuid, &launcher.auth_info.as_ref().unwrap().access_token, &launcher.auth_info.as_ref().unwrap().username);
+                    });
+                }
             }
 
             Ok(())

@@ -22,7 +22,7 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn start(&self, dir: &str) {
+    pub fn start(&self, dir: &str, uuid: &str, access_token: &str, username: &str) {
         profile::check_profile(&self.name);
         let profile: Profile = ClientProfile::new(
             &Path::new(dir)
@@ -61,7 +61,7 @@ impl Client {
                 &profile.main_class,
                 "main",
                 "([Ljava/lang/String;)V",
-                &[profile.create_args(dir, &env)],
+                &[profile.create_args(dir, &env, uuid, access_token, username)],
             )
             .unwrap()
             .v()

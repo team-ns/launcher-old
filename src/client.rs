@@ -8,24 +8,42 @@ use url::Url;
 
 use crate::security;
 use crate::security::SecurityManager;
+use crate::config::Config;
+use launcher_api::config::Configurable;
 
-pub struct WebSocketClient {
+
+pub struct Client {
     out: Sender<String>,
     recv: Receiver<String>,
     security: SecurityManager,
+    pub auth_info: Option<AuthInfo>,
+    pub config: Config,
 }
 
-impl WebSocketClient {
+pub struct AuthInfo {
+    pub uuid: String,
+    pub access_token: String,
+    pub username: String,
+}
+
+impl Client {
     pub async fn new(address: &str) -> Self {
         let ws = yarws::connect(address, yarws::log::config())
             .await
             .unwrap()
             .into_text();
         let (s, r) = ws.into_channel().await;
-        WebSocketClient {
+        Client {
             security: security::get_manager(),
             recv: r,
             out: s,
+            auth_info: None,
+            config: Config::get_config(
+                dirs::config_dir().unwrap()
+                    .join("nsl")
+                    .join("config.json")
+                    .as_path()
+            ).unwrap(),
         }
     }
 
