@@ -18,6 +18,10 @@ base64 = "0.12.1"
 rust-embed="5.5.1"
 yarws = "0.2.0"
 ecies-ed25519 = "0.3"
+hyper = "0.13.6"
+hyper-tls = "0.4.1"
+futures = "0.3"
+anyhow = "1.0.31"
 
 [dependencies.web-view]
 version = "0.6.2"
@@ -25,8 +29,8 @@ git = "https://gitlab.com/nsl_team/web-view"
 branch = "frameless"
 
 [dependencies.tokio]
-version = "0.2.19"
-features = ["macros", "sync", "rt-core", "blocking"]
+version = "0.2.21"
+features = ["full"]
 
 [dependencies.launcher_api]
 git = "https://gitlab.com/nsl_team/launcherapi"

@@ -11,6 +11,7 @@ use crate::security::SecurityManager;
 use crate::config::Config;
 use launcher_api::config::Configurable;
 
+pub mod downloader;
 
 pub struct Client {
     out: Sender<String>,
