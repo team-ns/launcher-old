@@ -4,7 +4,6 @@ use std::clone::Clone;
 
 use crate::config::auth::{AuthProvide, AuthResult, Entry};
 use crate::config::AuthProvider::{Empty, JSON};
-use crate::server::profile::get_profiles;
 use launcher_api::message::Error;
 use uuid::Uuid;
 
@@ -16,9 +15,6 @@ pub struct Config {
     pub address: String,
     pub auth: AuthProvider,
     pub texture: TextureProvider,
-    #[serde(skip)]
-    #[serde(default = "get_profiles")]
-    pub profiles: Vec<String>,
     pub workers: usize,
 }
 
@@ -56,7 +52,6 @@ impl Default for Config {
                 skin_url: "http://example.com/skin/{username}.png".to_string(),
                 cape_url: "http://example.com/cape/{username}.png".to_string(),
             },
-            profiles: get_profiles(),
         }
     }
 }

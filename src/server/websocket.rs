@@ -39,6 +39,7 @@ pub async fn ws_api(ws: WebSocket, server: Arc<RwLock<LaunchServer>>) {
             }
         };
         if let Ok(json) = msg.to_str() {
+            println!("{:?}", json.to_string());
             if let Ok(message) = serde_json::from_str::<ClientMessage>(json) {
                 match message {
                     ClientMessage::Auth(auth) => {
@@ -79,19 +80,19 @@ impl Handle for ProfileResourcesMessage {
         client: &mut Client,
     ) {
         let server = server.read().await;
-        if server.config.profiles.contains(&self.profile) {
-            let list = WalkDir::new(format!("static/{}", self.profile))
-                .into_iter()
-                .filter(|e| e.is_ok() && e.as_ref().ok().unwrap().metadata().unwrap().is_file())
-                .map(|e| e.ok().unwrap().path().display().to_string())
-                .collect::<Vec<String>>();
-            let message = ServerMessage::ProfileResources(ProfileResourcesResponse { list });
-            tx.send(Ok(Message::text(serde_json::to_string(&message).unwrap())));
-        } else {
-            let message = ServerMessage::Error(Error {
-                msg: String::from("This profile doesn't exist!"),
-            });
-            tx.send(Ok(Message::text(serde_json::to_string(&message).unwrap())));
+        match server.security.profiles.get(&self.profile) {
+            Some(hashedProfile) => {
+                let message = ServerMessage::ProfileResources(ProfileResourcesResponse {
+                    profile: hashedProfile.to_owned(),
+                });
+                tx.send(Ok(Message::text(serde_json::to_string(&message).unwrap())));
+            }
+            None => {
+                let message = ServerMessage::Error(Error {
+                    msg: String::from("This profile doesn't exist!"),
+                });
+                tx.send(Ok(Message::text(serde_json::to_string(&message).unwrap())));
+            }
         }
     }
 }

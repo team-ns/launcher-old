@@ -1,5 +1,5 @@
-use crate::server::profile::HashedProfile;
 use ecies_ed25519::SecretKey;
+use launcher_api::validation::HashedProfile;
 use log::info;
 use rand::rngs::OsRng;
 use std::collections::HashMap;

@@ -1,4 +1,5 @@
 use launcher_api::profile::Profile;
+use launcher_api::validation::{HashedFile, HashedProfile};
 use rustyline::completion::{extract_word, Completer};
 use rustyline::error::ReadlineError;
 use rustyline::Config as LineConfig;
@@ -6,14 +7,12 @@ use rustyline::{CompletionType, Context, EditMode, Editor, OutputStreamType};
 use rustyline_derive::{Helper, Highlighter, Hinter, Validator};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Read;
 use std::ops::DerefMut;
 use std::process::exit;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use walkdir::{DirEntry, WalkDir};
 
-use crate::server::profile::{HashedFile, HashedProfile};
 use crate::LaunchServer;
 
 type CmdFn = Box<dyn Fn(&mut LaunchServer, &[&str]) -> () + Send + Sync>;
@@ -134,7 +133,7 @@ fn register_command(helper: &mut CommandHelper) {
     helper.new_command("rehash", "Update checksum of profile files", rehash);
 }
 
-fn rehash(server: &mut LaunchServer, args: &[&str]) {
+pub fn rehash(server: &mut LaunchServer, args: &[&str]) {
     //duplicate files map
     let mut hashed_libs = HashMap::new();
     let mut hashed_natives = HashMap::new();
@@ -158,18 +157,8 @@ fn rehash(server: &mut LaunchServer, args: &[&str]) {
     fn fill_map(iter: impl Iterator<Item = DirEntry>, map: &mut HashMap<String, HashedFile>) {
         for file in iter {
             let path = file.path();
-            let (checksum, len) = {
-                let mut buffer = Vec::new();
-                File::open(path).unwrap().read_to_end(&mut buffer);
-                (
-                    t1ha::t1ha2_atonce128(buffer.as_slice(), 1),
-                    buffer.len() as u64,
-                )
-            };
-
             let strip_path = String::from(path.strip_prefix("static/").unwrap().to_str().unwrap());
-
-            map.insert(strip_path, HashedFile { len, checksum });
+            map.insert(strip_path, HashedFile::new(path.to_string_lossy().as_ref()));
         }
     }
 
@@ -241,14 +230,4 @@ fn rehash(server: &mut LaunchServer, args: &[&str]) {
     }
 
     server.security.profiles = hashed_profiles;
-
-    for profile in &server.security.profiles {
-        println!("Profile: {}", profile.0);
-        for hashed_file in profile.1 {
-            println!(
-                "Name: {} \nSize: {} \nChecksum: {} \n",
-                hashed_file.0, hashed_file.1.len, hashed_file.1.checksum
-            );
-        }
-    }
 }
