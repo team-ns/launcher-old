@@ -22,6 +22,7 @@ hyper = "0.13.6"
 hyper-tls = "0.4.1"
 futures = "0.3"
 anyhow = "1.0.31"
+notify = "5.0.0-pre.2"
 
 [dependencies.web-view]
 version = "0.6.2"

@@ -1,14 +1,14 @@
 use std::thread;
 
-use launcher_api::message::Error;
-use launcher_api::message::ServerMessage::{Auth, Error as OtherError};
+use launcher_api::message::ServerMessage::{Auth, Error as OtherError, ProfileResources};
 use launcher_api::message::{AuthMessage, AuthResponse, ClientMessage, ServerMessage};
+use launcher_api::message::{Error, ProfileResourcesMessage, ProfileResourcesResponse};
 use tokio::sync::mpsc::{Receiver, Sender};
 use url::Url;
 
+use crate::config::Config;
 use crate::security;
 use crate::security::SecurityManager;
-use crate::config::Config;
 use launcher_api::config::Configurable;
 
 pub mod downloader;
@@ -40,11 +40,13 @@ impl Client {
             out: s,
             auth_info: None,
             config: Config::get_config(
-                dirs::config_dir().unwrap()
+                dirs::config_dir()
+                    .unwrap()
                     .join("nsl")
                     .join("config.json")
-                    .as_path()
-            ).unwrap(),
+                    .as_path(),
+            )
+            .unwrap(),
         }
     }
 
@@ -58,6 +60,19 @@ impl Client {
             OtherError(e) => Err(e),
             _ => Err(Error {
                 msg: "Auth not found".to_string(),
+            }),
+        }
+    }
+
+    pub async fn get_profile(&mut self, profile: &str) -> Result<ProfileResourcesResponse, Error> {
+        let message = ClientMessage::ProfileResources(ProfileResourcesMessage {
+            profile: String::from(profile),
+        });
+        match self.send_sync(message).await {
+            ProfileResources(profile) => Ok(profile),
+            OtherError(e) => Err(e),
+            _ => Err(Error {
+                msg: "Profile sync error".to_string(),
             }),
         }
     }

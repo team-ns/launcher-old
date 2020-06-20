@@ -11,15 +11,15 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-pub struct HashedFile {
-    pub size: u64,
+pub struct RemoteFile {
     pub name: String,
+    pub size: u64,
 }
 
 const SMALL_SIZE: u64 = 1048576;
 const CHUNK_SIZE: u64 = 512000;
 
-pub async fn download(files: Vec<HashedFile>, file_server: String) -> Result<(), Error> {
+pub async fn download(files: Vec<RemoteFile>, file_server: String) -> Result<(), Error> {
     let tasks = files
         .into_iter()
         .map(|file| {
@@ -37,7 +37,7 @@ pub async fn download(files: Vec<HashedFile>, file_server: String) -> Result<(),
     join_tasks(tasks).await
 }
 
-fn get_chunks(file: &HashedFile) -> Vec<(u64, u64)> {
+fn get_chunks(file: &RemoteFile) -> Vec<(u64, u64)> {
     let mut chunks = Vec::new();
     let chunk_num = file.size / CHUNK_SIZE;
 
@@ -52,7 +52,7 @@ fn get_chunks(file: &HashedFile) -> Vec<(u64, u64)> {
     chunks
 }
 
-async fn concurrent_download(hashed_file: HashedFile, uri: Uri) -> Result<(), Error> {
+async fn concurrent_download(hashed_file: RemoteFile, uri: Uri) -> Result<(), Error> {
     let (sender, mut receiver) = mpsc::channel(100);
     let total_size = hashed_file.size.clone();
     let mut file = create_file(Path::new(&hashed_file.name)).await?;
@@ -98,7 +98,7 @@ async fn concurrent_download(hashed_file: HashedFile, uri: Uri) -> Result<(), Er
     join_tasks(tasks).await
 }
 
-async fn single_thread_download(hashed_file: HashedFile, uri: Uri) -> Result<(), Error> {
+async fn single_thread_download(hashed_file: RemoteFile, uri: Uri) -> Result<(), Error> {
     tokio::spawn(async move {
         let mut file = create_file(Path::new(&hashed_file.name)).await?;
         let client = Client::builder().build::<_, hyper::Body>(HttpsConnector::new());

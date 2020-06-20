@@ -1,6 +1,9 @@
 use ecies_ed25519::PublicKey;
 use rand::rngs::OsRng;
 
+pub mod validation;
+mod watcher;
+
 pub fn get_manager() -> SecurityManager {
     SecurityManager {
         public_key: PublicKey::from_bytes(include_bytes!("../public_key")).unwrap(),
