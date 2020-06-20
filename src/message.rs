@@ -1,17 +1,18 @@
+use crate::validation::HashedProfile;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
 pub enum ClientMessage {
     Auth(AuthMessage),
+    ProfileResources(ProfileResourcesMessage),
     Profiles(ProfilesMessage),
-    ProfileResources(ProfileResourcesMessage)
 }
 
 #[derive(Deserialize, Serialize)]
 pub enum ServerMessage {
     Auth(AuthResponse),
     ProfileResources(ProfileResourcesResponse),
-    Error(Error)
+    Error(Error),
 }
 
 #[derive(Deserialize, Serialize)]
@@ -22,17 +23,15 @@ pub struct AuthMessage {
 
 #[derive(Deserialize, Serialize)]
 pub struct ProfileResourcesMessage {
-    pub profile: String
+    pub profile: String,
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct ProfilesMessage {
-
-}
+pub struct ProfilesMessage {}
 
 #[derive(Deserialize, Serialize)]
 pub struct ProfileResourcesResponse {
-    pub list: Vec<String>
+    pub profile: HashedProfile,
 }
 
 #[derive(Deserialize, Serialize)]
