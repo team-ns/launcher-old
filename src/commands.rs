@@ -1,4 +1,3 @@
-use launcher_api::profile::Profile;
 use launcher_api::validation::{HashedFile, HashedProfile};
 use rustyline::completion::{extract_word, Completer};
 use rustyline::error::ReadlineError;
@@ -6,13 +5,13 @@ use rustyline::Config as LineConfig;
 use rustyline::{CompletionType, Context, EditMode, Editor, OutputStreamType};
 use rustyline_derive::{Helper, Highlighter, Hinter, Validator};
 use std::collections::HashMap;
-use std::fs::File;
 use std::ops::DerefMut;
 use std::process::exit;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use walkdir::{DirEntry, WalkDir};
 
+use crate::server::profile;
 use crate::LaunchServer;
 
 type CmdFn = Box<dyn Fn(&mut LaunchServer, &[&str]) -> () + Send + Sync>;
@@ -131,6 +130,7 @@ pub async fn start(server: Arc<RwLock<LaunchServer>>) {
 
 fn register_command(helper: &mut CommandHelper) {
     helper.new_command("rehash", "Update checksum of profile files", rehash);
+    helper.new_command("sync", "Sync profile list between server and client", sync);
 }
 
 pub fn rehash(server: &mut LaunchServer, args: &[&str]) {
@@ -140,19 +140,6 @@ pub fn rehash(server: &mut LaunchServer, args: &[&str]) {
 
     //hashed profiles
     let mut hashed_profiles: HashMap<String, HashedProfile> = HashMap::new();
-
-    //profile list
-    let profiles: Vec<Profile> = WalkDir::new("static/profiles")
-        .min_depth(2)
-        .max_depth(3)
-        .into_iter()
-        .flat_map(|v| v.ok())
-        .filter(|e| {
-            e.metadata().map(|m| m.is_file()).unwrap_or(false) && e.file_name().eq("profile.json")
-        })
-        .flat_map(|e| File::open(e.into_path()).ok())
-        .flat_map(|f| serde_json::from_reader(f).ok())
-        .collect();
 
     fn fill_map(iter: impl Iterator<Item = DirEntry>, map: &mut HashMap<String, HashedFile>) {
         for file in iter {
@@ -203,22 +190,24 @@ pub fn rehash(server: &mut LaunchServer, args: &[&str]) {
             hashed_native,
         );
     }
-
-    for profile in &profiles {
+    for profile in &server.profiles {
         //create profiles and hash non duplicate files
         let mut hashed_profile = HashedProfile::new();
+        let black_list = vec!["profile.json", "description.txt"];
 
         let file_iter = WalkDir::new(format!("static/profiles/{}", profile.name))
             .min_depth(1)
             .into_iter()
             .flat_map(|e| e.ok())
-            .filter(|e| e.metadata().map(|m| m.is_file()).unwrap_or(false))
+            .filter(|e| {
+                e.metadata().map(|m| m.is_file()).unwrap_or(false)
+                    && !black_list.contains(&e.file_name().to_str().unwrap_or(""))
+            })
             .into_iter();
         fill_map(file_iter, &mut hashed_profile);
 
         //fill libs from duplicate map
         for lib in &profile.libraries {
-            //TODO fix possible error with sync
             let lib = format!("libs/{}", lib);
             hashed_profile.insert(lib.clone(), hashed_libs.get(&lib).unwrap().clone());
         }
@@ -230,4 +219,10 @@ pub fn rehash(server: &mut LaunchServer, args: &[&str]) {
     }
 
     server.security.profiles = hashed_profiles;
+}
+
+pub fn sync(server: &mut LaunchServer, args: &[&str]) {
+    let (profiles, profiles_info) = profile::get_profiles();
+    server.profiles = profiles;
+    server.profiles_info = profiles_info;
 }

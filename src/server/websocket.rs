@@ -3,16 +3,16 @@ use std::sync::Arc;
 use futures::{FutureExt, StreamExt};
 use launcher_api::message::{
     AuthMessage, AuthResponse, ClientMessage, Error, ProfileResourcesMessage,
-    ProfileResourcesResponse, ProfilesMessage, ServerMessage,
+    ProfileResourcesResponse, ProfilesInfoMessage, ProfilesInfoResponse, ProfilesMessage,
+    ProfilesResponse, ServerMessage,
 };
-use log::{error, info};
+use log::error;
 use rand::Rng;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::{mpsc, RwLock};
 use warp::filters::ws::{Message, WebSocket};
 
 use crate::LaunchServer;
-use walkdir::WalkDir;
 pub struct Client {}
 
 impl Client {
@@ -55,6 +55,11 @@ pub async fn ws_api(ws: WebSocket, server: Arc<RwLock<LaunchServer>>) {
                             .handle(tx.clone(), server.clone(), &mut client)
                             .await;
                     }
+                    ClientMessage::ProfilesIfo(profiles_info) => {
+                        profiles_info
+                            .handle(tx.clone(), server.clone(), &mut client)
+                            .await;
+                    }
                 }
             }
         }
@@ -81,9 +86,9 @@ impl Handle for ProfileResourcesMessage {
     ) {
         let server = server.read().await;
         match server.security.profiles.get(&self.profile) {
-            Some(hashedProfile) => {
+            Some(hashed_profile) => {
                 let message = ServerMessage::ProfileResources(ProfileResourcesResponse {
-                    profile: hashedProfile.to_owned(),
+                    profile: hashed_profile.to_owned(),
                 });
                 tx.send(Ok(Message::text(serde_json::to_string(&message).unwrap())));
             }
@@ -105,7 +110,27 @@ impl Handle for ProfilesMessage {
         server: Arc<RwLock<LaunchServer>>,
         client: &mut Client,
     ) {
-        unimplemented!()
+        let server = server.read().await;
+        let message = ServerMessage::Profiles(ProfilesResponse {
+            profiles: server.profiles.clone(),
+        });
+        tx.send(Ok(Message::text(serde_json::to_string(&message).unwrap())));
+    }
+}
+
+#[async_trait::async_trait]
+impl Handle for ProfilesInfoMessage {
+    async fn handle(
+        &self,
+        tx: UnboundedSender<Result<Message, warp::Error>>,
+        server: Arc<RwLock<LaunchServer>>,
+        client: &mut Client,
+    ) {
+        let server = server.read().await;
+        let message = ServerMessage::ProfilesIfo(ProfilesInfoResponse {
+            profiles_info: server.profiles_info.clone(),
+        });
+        tx.send(Ok(Message::text(serde_json::to_string(&message).unwrap())));
     }
 }
 
