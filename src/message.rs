@@ -1,3 +1,4 @@
+use crate::profile::{Profile, ProfileInfo};
 use crate::validation::HashedProfile;
 use serde::{Deserialize, Serialize};
 
@@ -6,12 +7,15 @@ pub enum ClientMessage {
     Auth(AuthMessage),
     ProfileResources(ProfileResourcesMessage),
     Profiles(ProfilesMessage),
+    ProfilesIfo(ProfilesInfoMessage),
 }
 
 #[derive(Deserialize, Serialize)]
 pub enum ServerMessage {
     Auth(AuthResponse),
     ProfileResources(ProfileResourcesResponse),
+    Profiles(ProfilesResponse),
+    ProfilesIfo(ProfilesInfoResponse),
     Error(Error),
 }
 
@@ -27,7 +31,20 @@ pub struct ProfileResourcesMessage {
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct ProfilesMessage {}
+pub struct ProfilesMessage;
+
+#[derive(Deserialize, Serialize)]
+pub struct ProfilesInfoMessage;
+
+#[derive(Deserialize, Serialize)]
+pub struct ProfilesResponse {
+    pub profiles: Vec<Profile>,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct ProfilesInfoResponse {
+    pub profiles_info: Vec<ProfileInfo>,
+}
 
 #[derive(Deserialize, Serialize)]
 pub struct ProfileResourcesResponse {
