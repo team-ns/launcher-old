@@ -9,7 +9,8 @@ pub struct Config {
     pub save_data: bool,
     pub saved_password: String,
     pub last_name: String,
-    pub url: String,
+    pub websocket: String,
+    pub file_server: String,
 }
 
 impl Configurable for Config {}

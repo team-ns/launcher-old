@@ -11,6 +11,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
+#[derive(Debug)]
 pub struct RemoteFile {
     pub name: String,
     pub size: u64,

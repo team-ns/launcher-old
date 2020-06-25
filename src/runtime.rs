@@ -1,17 +1,14 @@
-use std::cell::RefCell;
-use std::sync::Arc;
-
-use rust_embed::RustEmbed;
-use tokio::runtime::{Handle, Runtime};
-use tokio::sync::Mutex;
-use web_view::{Content, WVResult};
-
-use messages::RuntimeMessage;
-
-use crate::client::{Client, AuthInfo};
-use crate::config::Config;
-use crate::game;
 use launcher_api::config::Configurable;
+use messages::RuntimeMessage;
+use rust_embed::RustEmbed;
+use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use web_view::Content;
+
+use crate::client::{AuthInfo, Client};
+use crate::game;
+use crate::security::validation;
 
 mod messages;
 
@@ -30,9 +27,8 @@ impl Handler {
 }
 
 pub async fn start() {
-    let mut socket: Arc<Mutex<Client>> = Arc::new(Mutex::new(
-        Client::new("ws://127.0.0.1:8080/api/").await,
-    ));
+    let mut socket: Arc<Mutex<Client>> =
+        Arc::new(Mutex::new(Client::new("ws://127.0.0.1:8080/api/").await));
     let resources = std::str::from_utf8(&Asset::get("index.html").unwrap().to_mut())
         .unwrap()
         .to_string();
@@ -50,7 +46,6 @@ pub async fn start() {
             let message: RuntimeMessage = serde_json::from_str(arg).unwrap();
             match message {
                 RuntimeMessage::Login { login, password } => {
-                    println!("who");
                     tokio::spawn(async move {
                         let mut value = socket.lock().await;
                         let result = value.auth(&login, &password).await;
@@ -70,13 +65,35 @@ pub async fn start() {
                 }
                 RuntimeMessage::Play { profile } => {
                     tokio::spawn(async move {
-                        let launcher = socket.lock().await;
-                        handler.dispatch(|w| {
-                            w.exit();
-                            Ok(())
-                        });
-                        let client = game::Client { name: profile };
-                        game::Client::start(&client, &launcher.config.game_dir, &launcher.auth_info.as_ref().unwrap().uuid, &launcher.auth_info.as_ref().unwrap().access_token, &launcher.auth_info.as_ref().unwrap().username);
+                        let mut value = socket.lock().await;
+                        let resources = value.get_profile(&profile).await;
+                        if resources.is_ok() {
+                            let resources = resources.ok().unwrap();
+                            validation::validate_profile(
+                                value.config.game_dir.clone(),
+                                profile.clone(),
+                                resources.profile,
+                                value.config.file_server.clone(),
+                            )
+                            .await
+                            .unwrap();
+
+                            handler.dispatch(|w| {
+                                w.exit();
+                                Ok(())
+                            });
+
+                            let client = game::Client {
+                                name: profile.clone(),
+                            };
+                            game::Client::start(
+                                &client,
+                                &value.config.game_dir,
+                                &value.auth_info.as_ref().unwrap().uuid,
+                                &value.auth_info.as_ref().unwrap().access_token,
+                                &value.auth_info.as_ref().unwrap().username,
+                            );
+                        }
                     });
                 }
             }
