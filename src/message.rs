@@ -1,21 +1,22 @@
-use crate::profile::{Profile, ProfileInfo};
-use crate::validation::HashedProfile;
 use serde::{Deserialize, Serialize};
+
+use crate::profile::{Profile, ProfileInfo};
+use crate::validation::{HashedDirectory, OsType};
 
 #[derive(Deserialize, Serialize)]
 pub enum ClientMessage {
     Auth(AuthMessage),
     ProfileResources(ProfileResourcesMessage),
-    Profiles(ProfilesMessage),
-    ProfilesIfo(ProfilesInfoMessage),
+    Profile(ProfileMessage),
+    ProfilesInfo(ProfilesInfoMessage),
 }
 
 #[derive(Deserialize, Serialize)]
 pub enum ServerMessage {
     Auth(AuthResponse),
     ProfileResources(ProfileResourcesResponse),
-    Profiles(ProfilesResponse),
-    ProfilesIfo(ProfilesInfoResponse),
+    Profile(ProfileResponse),
+    ProfilesInfo(ProfilesInfoResponse),
     Error(Error),
 }
 
@@ -28,17 +29,20 @@ pub struct AuthMessage {
 #[derive(Deserialize, Serialize)]
 pub struct ProfileResourcesMessage {
     pub profile: String,
+    pub os_type: OsType,
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct ProfilesMessage;
+pub struct ProfileMessage {
+    pub profile: String,
+}
 
 #[derive(Deserialize, Serialize)]
 pub struct ProfilesInfoMessage;
 
 #[derive(Deserialize, Serialize)]
-pub struct ProfilesResponse {
-    pub profiles: Vec<Profile>,
+pub struct ProfileResponse {
+    pub profile: Profile,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -48,7 +52,10 @@ pub struct ProfilesInfoResponse {
 
 #[derive(Deserialize, Serialize)]
 pub struct ProfileResourcesResponse {
-    pub profile: HashedProfile,
+    pub profile: HashedDirectory,
+    pub assets: HashedDirectory,
+    pub natives: HashedDirectory,
+    pub jre: HashedDirectory,
 }
 
 #[derive(Deserialize, Serialize)]
