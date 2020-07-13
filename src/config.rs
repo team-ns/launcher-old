@@ -1,11 +1,12 @@
 use launcher_api::config::Configurable;
+use launcher_api::message::Error;
 use serde::{Deserialize, Serialize};
 use std::clone::Clone;
+use log::error;
+use uuid::Uuid;
 
 use crate::config::auth::{AuthProvide, AuthResult, Entry};
 use crate::config::AuthProvider::{Empty, JSON};
-use launcher_api::message::Error;
-use uuid::Uuid;
 
 pub(crate) mod auth;
 mod texture;
@@ -59,11 +60,12 @@ impl Default for Config {
 pub struct None;
 
 impl AuthProvider {
-    pub async fn auth(&self, login: &str, password: &str, ip: &str) -> Result<AuthResult, Error> {
+    pub async fn auth(&self, login: &str, password: &str, ip: &str) -> Result<AuthResult, String> {
         match self {
-            Empty => Err(Error {
-                msg: "Cringe".to_string(),
-            }),
+            Empty => {
+                error!("Auth provider not found, check your config!");
+                Err("Can't authorize account. Please contact to administration!".to_string())
+            },
             JSON(json) => {
                 json.auth(login, password, ip).await
                 /*let client = reqwest::Client::new();
@@ -137,9 +139,12 @@ impl AuthProvider {
             }
         }
     }
-    pub async fn update_access_token(&self, uuid: &Uuid, token: &str) -> bool {
+    pub async fn update_access_token(&self, uuid: &Uuid, token: &str) -> Result<(), String> {
         match self {
-            Empty => true,
+            Empty => {
+                error!("Auth provider not found, check your config!");
+                Err("Can't authorize account. Please contact to administration!".to_string())
+            },
             JSON(json) => {
                 json.update_access_token(uuid, token).await
                 /*let client = reqwest::Client::new();

@@ -1,18 +1,25 @@
 use std::sync::Arc;
 
+use anyhow::Result;
 use futures::{FutureExt, StreamExt};
 use launcher_api::message::{
-    AuthMessage, AuthResponse, ClientMessage, Error, ProfileResourcesMessage,
-    ProfileResourcesResponse, ProfilesInfoMessage, ProfilesInfoResponse, ProfilesMessage,
-    ProfilesResponse, ServerMessage,
+    AuthMessage, AuthResponse, ClientMessage, Error, ProfileMessage, ProfileResourcesMessage,
+    ProfileResourcesResponse, ProfileResponse, ProfilesInfoMessage, ProfilesInfoResponse,
+    ServerMessage,
 };
+use launcher_api::validation::HashedDirectory;
 use log::error;
 use rand::Rng;
+use std::collections::HashMap;
+use std::hash::Hash;
+use tokio::macros::support::Future;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::{mpsc, RwLock};
 use warp::filters::ws::{Message, WebSocket};
 
+use crate::security::NativeVersion;
 use crate::LaunchServer;
+
 pub struct Client {}
 
 impl Client {
@@ -45,8 +52,8 @@ pub async fn ws_api(ws: WebSocket, server: Arc<RwLock<LaunchServer>>) {
                     ClientMessage::Auth(auth) => {
                         auth.handle(tx.clone(), server.clone(), &mut client).await;
                     }
-                    ClientMessage::Profiles(profiles) => {
-                        profiles
+                    ClientMessage::Profile(profile) => {
+                        profile
                             .handle(tx.clone(), server.clone(), &mut client)
                             .await;
                     }
@@ -55,7 +62,7 @@ pub async fn ws_api(ws: WebSocket, server: Arc<RwLock<LaunchServer>>) {
                             .handle(tx.clone(), server.clone(), &mut client)
                             .await;
                     }
-                    ClientMessage::ProfilesIfo(profiles_info) => {
+                    ClientMessage::ProfilesInfo(profiles_info) => {
                         profiles_info
                             .handle(tx.clone(), server.clone(), &mut client)
                             .await;
@@ -64,6 +71,14 @@ pub async fn ws_api(ws: WebSocket, server: Arc<RwLock<LaunchServer>>) {
             }
         }
     }
+}
+
+async fn send(tx: UnboundedSender<Result<Message, warp::Error>>, f: impl Future<Output = Result<ServerMessage, String>>) {
+    let message = match f.await {
+        Ok(message) => message,
+        Err(e) => ServerMessage::Error(Error {msg : e})
+    };
+    tx.send(Ok(Message::text(serde_json::to_string(&message).unwrap())));
 }
 
 #[async_trait::async_trait]
@@ -76,6 +91,21 @@ pub trait Handle {
     );
 }
 
+fn get_resource<T>(
+    resource: &Option<HashMap<T, HashedDirectory>>,
+    key: &T,
+) -> Result<HashedDirectory, String>
+where
+    T: Eq + Hash,
+{
+    match resource.as_ref().map(|resource| resource.get(&key)).flatten() {
+        Some(resource) => Ok(resource.to_owned()),
+        None => Err(
+            "This profile resource doesn't exist or not synchronized!".to_string()
+        ),
+    }
+}
+
 #[async_trait::async_trait]
 impl Handle for ProfileResourcesMessage {
     async fn handle(
@@ -84,26 +114,36 @@ impl Handle for ProfileResourcesMessage {
         server: Arc<RwLock<LaunchServer>>,
         client: &mut Client,
     ) {
-        let server = server.read().await;
-        match server.security.profiles.get(&self.profile) {
-            Some(hashed_profile) => {
-                let message = ServerMessage::ProfileResources(ProfileResourcesResponse {
-                    profile: hashed_profile.to_owned(),
-                });
-                tx.send(Ok(Message::text(serde_json::to_string(&message).unwrap())));
+        let server = &*server.read().await;
+        send(tx, async {
+            match server.profiles.get(&self.profile) {
+                Some(profile) => {
+                    let assets = get_resource(&server.security.assets, &profile.assets)?;
+                    let natives = get_resource(
+                        &server.security.natives,
+                        &NativeVersion {
+                            version: profile.version.clone(),
+                            os_type: self.os_type.clone(),
+                        },
+                    )?;
+                    let jre = get_resource(&server.security.jres, &self.os_type)?;
+                    let profile = get_resource(&server.security.profiles, &self.profile)?;
+
+                    Ok(ServerMessage::ProfileResources(ProfileResourcesResponse {
+                        profile,
+                        assets,
+                        natives,
+                        jre,
+                    }))
+                }
+                None => Err("This profile doesn't exist!".to_string()),
             }
-            None => {
-                let message = ServerMessage::Error(Error {
-                    msg: String::from("This profile doesn't exist!"),
-                });
-                tx.send(Ok(Message::text(serde_json::to_string(&message).unwrap())));
-            }
-        }
+        }).await;
     }
 }
 
 #[async_trait::async_trait]
-impl Handle for ProfilesMessage {
+impl Handle for ProfileMessage {
     async fn handle(
         &self,
         tx: UnboundedSender<Result<Message, warp::Error>>,
@@ -111,10 +151,14 @@ impl Handle for ProfilesMessage {
         client: &mut Client,
     ) {
         let server = server.read().await;
-        let message = ServerMessage::Profiles(ProfilesResponse {
-            profiles: server.profiles.clone(),
-        });
-        tx.send(Ok(Message::text(serde_json::to_string(&message).unwrap())));
+        send(tx, async {
+            match server.profiles.get(&self.profile) {
+                Some(profile) => Ok(ServerMessage::Profile(ProfileResponse {
+                    profile: profile.to_owned(),
+                })),
+                None => Err("This profile doesn't exist!".to_string()),
+            }
+        }).await;
     }
 }
 
@@ -127,10 +171,11 @@ impl Handle for ProfilesInfoMessage {
         client: &mut Client,
     ) {
         let server = server.read().await;
-        let message = ServerMessage::ProfilesIfo(ProfilesInfoResponse {
-            profiles_info: server.profiles_info.clone(),
-        });
-        tx.send(Ok(Message::text(serde_json::to_string(&message).unwrap())));
+        send(tx, async {
+            Ok(ServerMessage::ProfilesInfo(ProfilesInfoResponse {
+                profiles_info: server.profiles_info.clone(),
+            }))
+        }).await;
     }
 }
 
@@ -145,47 +190,29 @@ impl Handle for AuthMessage {
         let server = server.read().await;
         //TODO ADD IP FOR LIMITERS
         let ip = "".to_string();
-        let password = server.security.decrypt(&self.password);
-        let result = server.config.auth.auth(&self.login, &password, &ip).await;
-        match result {
-            Ok(result) => {
-                if result.message.is_none() {
-                    let digest = {
-                        let mut rng = rand::thread_rng();
-                        md5::compute(format!(
-                            "{}{}{}",
-                            rng.gen_range(1000000000, 2147483647),
-                            rng.gen_range(1000000000, 2147483647),
-                            rng.gen_range(0, 9)
-                        ))
-                    };
-                    let access_token = format!("{:x}", digest);
-                    let uuid = result.uuid.unwrap();
-                    if server
-                        .config
-                        .auth
-                        .update_access_token(&uuid, &access_token)
-                        .await
-                    {
-                        tx.send(Ok(Message::text(
-                            serde_json::to_string(&ServerMessage::Auth(AuthResponse {
-                                uuid: uuid.to_string(),
-                                access_token: access_token.to_string(),
-                            }))
-                            .unwrap(),
-                        )));
-                    }
-                } else {
-                    let message = ServerMessage::Error(Error {
-                        msg: result.message.unwrap(),
-                    });
-                    tx.send(Ok(Message::text(serde_json::to_string(&message).unwrap())));
-                }
+        send(tx, async {
+            let password = server.security.decrypt(&self.password)?;
+            let result = server.config.auth.auth(&self.login, &password, &ip).await?;
+            if result.message.is_none() {
+                let digest = {
+                    let mut rng = rand::thread_rng();
+                    md5::compute(format!(
+                        "{}{}{}",
+                        rng.gen_range(1000000000, 2147483647),
+                        rng.gen_range(1000000000, 2147483647),
+                        rng.gen_range(0, 9)
+                    ))
+                };
+                let access_token = format!("{:x}", digest);
+                let uuid = result.uuid.unwrap();
+                server.config.auth.update_access_token(&uuid, &access_token).await?;
+                Ok(ServerMessage::Auth(AuthResponse {
+                    uuid: uuid.to_string(),
+                    access_token: access_token.to_string(),
+                }))
+            } else {
+                Err(result.message.unwrap())
             }
-            Err(e) => {
-                let message = ServerMessage::Error(Error { msg: e.msg });
-                tx.send(Ok(Message::text(serde_json::to_string(&message).unwrap())));
-            }
-        }
+        }).await;
     }
 }
