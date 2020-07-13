@@ -53,6 +53,7 @@ pub struct ProfilesInfoResponse {
 #[derive(Deserialize, Serialize)]
 pub struct ProfileResourcesResponse {
     pub profile: HashedDirectory,
+    pub libraries: HashedDirectory,
     pub assets: HashedDirectory,
     pub natives: HashedDirectory,
     pub jre: HashedDirectory,
