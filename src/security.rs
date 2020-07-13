@@ -23,6 +23,7 @@ pub struct NativeVersion {
 pub struct SecurityManager {
     pub secret_key: SecretKey,
     pub profiles: Option<HashMap<String, HashedDirectory>>,
+    pub libraries: Option<HashMap<String, HashedDirectory>>,
     pub assets: Option<HashMap<String, HashedDirectory>>,
     pub natives: Option<HashMap<NativeVersion, HashedDirectory>>,
     pub jres: Option<HashMap<OsType, HashedDirectory>>,
@@ -44,6 +45,7 @@ impl Default for SecurityManager {
         SecurityManager {
             secret_key: SecretKey::from_bytes(&bytes).expect("Failed to parse key!"),
             profiles: None,
+            libraries: None,
             assets: None,
             natives: None,
             jres: None,
@@ -94,7 +96,12 @@ impl SecurityManager {
         get_resource!(
             args,
             self.profiles,
-            SecurityManager::hash_profiles(profiles)
+            SecurityManager::hash_profiles(profiles.clone())
+        );
+        get_resource!(
+            args,
+            self.libraries,
+            SecurityManager::hash_libraries(profiles)
         );
         get_resource!(args, self.assets, SecurityManager::hash_assets());
         get_resource!(args, self.natives, SecurityManager::hash_natives());
@@ -116,11 +123,24 @@ impl SecurityManager {
                 .filter(|e| !black_list.contains(&e.file_name().to_str().unwrap_or("")));
             fill_map(file_iter, &mut hashed_profile)?;
 
+            hashed_profiles.insert(profile.name.clone(), hashed_profile);
+        }
+        Ok(hashed_profiles)
+    }
+
+    fn hash_libraries(
+        profiles: Values<String, Profile>,
+    ) -> Result<HashMap<String, HashedDirectory>> {
+        let libs = create_hashed_dir("static/libs")?;
+        let mut hashed_libs = HashMap::new();
+
+        for profile in profiles {
+            let mut hashed_profile_libs = HashedDirectory::new();
             for lib in &profile.libraries {
                 let lib = format!("libs/{}", lib);
-                match hashed_libs.get(&lib) {
+                match libs.get(&lib) {
                     Some(file) => {
-                        hashed_profile.insert(lib.clone(), file.clone());
+                        hashed_profile_libs.insert(lib.clone(), file.clone());
                     }
                     None => {
                         error!(
@@ -130,9 +150,9 @@ impl SecurityManager {
                     }
                 }
             }
-            hashed_profiles.insert(profile.name.clone(), hashed_profile);
+            hashed_libs.insert(profile.name.clone(), hashed_profile_libs);
         }
-        Ok(hashed_profiles)
+        Ok(hashed_libs)
     }
 
     fn hash_assets() -> Result<HashMap<String, HashedDirectory>> {

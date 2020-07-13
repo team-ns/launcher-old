@@ -73,10 +73,13 @@ pub async fn ws_api(ws: WebSocket, server: Arc<RwLock<LaunchServer>>) {
     }
 }
 
-async fn send(tx: UnboundedSender<Result<Message, warp::Error>>, f: impl Future<Output = Result<ServerMessage, String>>) {
+async fn send(
+    tx: UnboundedSender<Result<Message, warp::Error>>,
+    f: impl Future<Output = Result<ServerMessage, String>>,
+) {
     let message = match f.await {
         Ok(message) => message,
-        Err(e) => ServerMessage::Error(Error {msg : e})
+        Err(e) => ServerMessage::Error(Error { msg: e }),
     };
     tx.send(Ok(Message::text(serde_json::to_string(&message).unwrap())));
 }
@@ -98,11 +101,13 @@ fn get_resource<T>(
 where
     T: Eq + Hash,
 {
-    match resource.as_ref().map(|resource| resource.get(&key)).flatten() {
+    match resource
+        .as_ref()
+        .map(|resource| resource.get(&key))
+        .flatten()
+    {
         Some(resource) => Ok(resource.to_owned()),
-        None => Err(
-            "This profile resource doesn't exist or not synchronized!".to_string()
-        ),
+        None => Err("This profile resource doesn't exist or not synchronized!".to_string()),
     }
 }
 
@@ -118,6 +123,7 @@ impl Handle for ProfileResourcesMessage {
         send(tx, async {
             match server.profiles.get(&self.profile) {
                 Some(profile) => {
+                    let libraries = get_resource(&server.security.libraries, &self.profile)?;
                     let assets = get_resource(&server.security.assets, &profile.assets)?;
                     let natives = get_resource(
                         &server.security.natives,
@@ -131,6 +137,7 @@ impl Handle for ProfileResourcesMessage {
 
                     Ok(ServerMessage::ProfileResources(ProfileResourcesResponse {
                         profile,
+                        libraries,
                         assets,
                         natives,
                         jre,
@@ -138,7 +145,8 @@ impl Handle for ProfileResourcesMessage {
                 }
                 None => Err("This profile doesn't exist!".to_string()),
             }
-        }).await;
+        })
+        .await;
     }
 }
 
@@ -158,7 +166,8 @@ impl Handle for ProfileMessage {
                 })),
                 None => Err("This profile doesn't exist!".to_string()),
             }
-        }).await;
+        })
+        .await;
     }
 }
 
@@ -175,7 +184,8 @@ impl Handle for ProfilesInfoMessage {
             Ok(ServerMessage::ProfilesInfo(ProfilesInfoResponse {
                 profiles_info: server.profiles_info.clone(),
             }))
-        }).await;
+        })
+        .await;
     }
 }
 
@@ -205,7 +215,11 @@ impl Handle for AuthMessage {
                 };
                 let access_token = format!("{:x}", digest);
                 let uuid = result.uuid.unwrap();
-                server.config.auth.update_access_token(&uuid, &access_token).await?;
+                server
+                    .config
+                    .auth
+                    .update_access_token(&uuid, &access_token)
+                    .await?;
                 Ok(ServerMessage::Auth(AuthResponse {
                     uuid: uuid.to_string(),
                     access_token: access_token.to_string(),
@@ -213,6 +227,7 @@ impl Handle for AuthMessage {
             } else {
                 Err(result.message.unwrap())
             }
-        }).await;
+        })
+        .await;
     }
 }
