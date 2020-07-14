@@ -1,10 +1,8 @@
-use launcher_api::config::Configurable;
+use anyhow::Result;
 use messages::RuntimeMessage;
-use rust_embed::RustEmbed;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use web_view::Content;
+use web_view::{Content, Handle};
 
 use crate::client::{AuthInfo, Client};
 use crate::game;
@@ -12,92 +10,95 @@ use crate::security::validation;
 
 mod messages;
 
-#[derive(RustEmbed)]
-#[folder = "runtime/"]
-struct Asset;
-
-struct Handler {
-    ws: Client,
-}
-
-impl Handler {
-    async fn auth(&mut self, login: &str, password: &str) -> bool {
-        self.ws.auth(login, password).await.is_ok()
-    }
+#[macro_export]
+macro_rules! handle_error {
+    ($handler:expr, $result:expr) => {
+        if let Err(error) = $result {
+            $handler.dispatch(move |w| {
+                w.eval(&format!("app.backend.error('{}')", error));
+                Ok(())
+            });
+        }
+    };
 }
 
 pub async fn start() {
-    let mut socket: Arc<Mutex<Client>> =
-        Arc::new(Mutex::new(Client::new("ws://127.0.0.1:8080/api/").await));
-    let resources = std::str::from_utf8(&Asset::get("index.html").unwrap().to_mut())
-        .unwrap()
-        .to_string();
-    let mut webview = web_view::builder()
+    let socket: Arc<Mutex<Client>> =
+        Arc::new(Mutex::new(Client::new("ws://127.0.0.1:9090/api/").await));
+    let webview = web_view::builder()
         .title("NSLauncher")
-        .content(Content::Html(&resources))
+        .content(Content::Html(include_str!("../runtime/index.html")))
         .size(1000, 600)
         .resizable(false)
         .debug(true)
         .user_data(())
         .invoke_handler(move |view, arg| {
             let handler = view.handle();
-            let mut socket = Arc::clone(&socket);
-            println!("{}", arg);
+            let socket = Arc::clone(&socket);
             let message: RuntimeMessage = serde_json::from_str(arg).unwrap();
             match message {
                 RuntimeMessage::Login { login, password } => {
                     tokio::spawn(async move {
-                        let mut value = socket.lock().await;
-                        let result = value.auth(&login, &password).await;
-                        if result.is_ok() {
-                            let result = result.ok().unwrap();
-                            value.auth_info = Some(AuthInfo {
-                                access_token: result.access_token,
-                                uuid: result.uuid,
-                                username: login,
-                            });
-                            handler.dispatch(|w| {
-                                w.eval("app.backend.logined()");
-                                Ok(())
-                            });
+                        let mut client = socket.lock().await;
+                        match client.auth(&login, &password).await {
+                            Ok(response) => {
+                                client.auth_info = Some(AuthInfo {
+                                    access_token: response.access_token,
+                                    uuid: response.uuid,
+                                    username: login,
+                                });
+                                handler.dispatch(|w| {
+                                    w.eval("app.backend.logined()");
+                                    Ok(())
+                                });
+                            }
+                            Err(error) => {
+                                handler.dispatch(move |w| {
+                                    w.eval(&format!("app.backend.error('{}')", error));
+                                    Ok(())
+                                });
+                            }
                         }
                     });
                 }
                 RuntimeMessage::Play { profile } => {
                     tokio::spawn(async move {
-                        let mut value = socket.lock().await;
-                        let resources = value.get_profile(&profile).await;
-                        if resources.is_ok() {
-                            let resources = resources.ok().unwrap();
+                        async fn start_client(
+                            handler: Handle<()>,
+                            socket: Arc<Mutex<Client>>,
+                            profile: String,
+                        ) -> Result<()> {
+                            let mut client = socket.lock().await;
+                            let resources = client.get_resources(&profile).await?;
                             validation::validate_profile(
-                                value.config.game_dir.clone(),
+                                client.config.game_dir.clone(),
                                 profile.clone(),
-                                resources.profile,
-                                value.config.file_server.clone(),
+                                resources,
+                                client.config.file_server.clone(),
+                                handler.clone(),
                             )
-                            .await
-                            .unwrap();
-
-                            handler.dispatch(|w| {
-                                w.exit();
-                                Ok(())
-                            });
-
-                            let client = game::Client {
-                                name: profile.clone(),
-                            };
-                            game::Client::start(
-                                &client,
-                                &value.config.game_dir,
-                                &value.auth_info.as_ref().unwrap().uuid,
-                                &value.auth_info.as_ref().unwrap().access_token,
-                                &value.auth_info.as_ref().unwrap().username,
-                            );
+                            .await?;
+                            let profile = client.get_profile(&profile).await?.profile;
+                            let jvm = game::create_jvm(profile.clone(), &client.config.game_dir)?;
+                            if let Some(info) = client.auth_info.clone() {
+                                //jvm watcher start
+                                handler.dispatch(|w| {
+                                    w.exit();
+                                    Ok(())
+                                });
+                                game::start(jvm, profile, info, &client.config.game_dir)?
+                            } else {
+                                return Err(anyhow::anyhow!("Start game before auth!"));
+                            }
+                            Ok(())
                         }
+                        handle_error!(
+                            handler,
+                            start_client(handler.clone(), socket, profile).await
+                        );
                     });
                 }
-            }
-
+            };
             Ok(())
         })
         .build()

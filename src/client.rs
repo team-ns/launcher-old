@@ -6,9 +6,7 @@ use launcher_api::message::{
 };
 use launcher_api::message::{Error, ProfileResourcesMessage, ProfileResourcesResponse};
 use launcher_api::validation::OsType;
-use std::thread;
 use tokio::sync::mpsc::{Receiver, Sender};
-use url::Url;
 
 use crate::config::Config;
 use crate::security;
