@@ -1,15 +1,18 @@
-use std::thread;
-
-use launcher_api::message::ServerMessage::{Auth, Error as OtherError, ProfileResources};
-use launcher_api::message::{AuthMessage, AuthResponse, ClientMessage, ServerMessage};
+use anyhow::Result;
+use launcher_api::config::Configurable;
+use launcher_api::message::ServerMessage::{Auth, Error as OtherError, Profile, ProfileResources};
+use launcher_api::message::{
+    AuthMessage, AuthResponse, ClientMessage, ProfileMessage, ProfileResponse, ServerMessage,
+};
 use launcher_api::message::{Error, ProfileResourcesMessage, ProfileResourcesResponse};
+use launcher_api::validation::OsType;
+use std::thread;
 use tokio::sync::mpsc::{Receiver, Sender};
 use url::Url;
 
 use crate::config::Config;
 use crate::security;
 use crate::security::SecurityManager;
-use launcher_api::config::Configurable;
 
 pub mod downloader;
 
@@ -21,6 +24,7 @@ pub struct Client {
     pub config: Config,
 }
 
+#[derive(Clone)]
 pub struct AuthInfo {
     pub uuid: String,
     pub access_token: String,
@@ -50,30 +54,49 @@ impl Client {
         }
     }
 
-    pub async fn auth(&mut self, login: &str, password: &str) -> Result<AuthResponse, Error> {
+    pub async fn auth(&mut self, login: &str, password: &str) -> Result<AuthResponse> {
         let message = ClientMessage::Auth(AuthMessage {
             login: String::from(login),
             password: self.security.encrypt(password),
         });
         match self.send_sync(message).await {
             Auth(auth) => Ok(auth),
-            OtherError(e) => Err(e),
-            _ => Err(Error {
-                msg: "Auth not found".to_string(),
-            }),
+            OtherError(error) => Err(anyhow::anyhow!("{}", error.msg)),
+            _ => Err(anyhow::anyhow!("Auth not found")),
         }
     }
 
-    pub async fn get_profile(&mut self, profile: &str) -> Result<ProfileResourcesResponse, Error> {
+    pub async fn get_resources(&mut self, profile: &str) -> Result<ProfileResourcesResponse> {
+        #[cfg(all(target_os = "linux", target_arch = "x86"))]
+        let os_type = OsType::LinuxX32;
+        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+        let os_type = OsType::LinuxX64;
+        #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+        let os_type = OsType::MacOSX64;
+        #[cfg(all(target_os = "windows", target_arch = "x86"))]
+        let os_type = OsType::WindowsX32;
+        #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+        let os_type = OsType::WindowsX64;
+
         let message = ClientMessage::ProfileResources(ProfileResourcesMessage {
             profile: String::from(profile),
+            os_type,
         });
         match self.send_sync(message).await {
             ProfileResources(profile) => Ok(profile),
-            OtherError(e) => Err(e),
-            _ => Err(Error {
-                msg: "Profile sync error".to_string(),
-            }),
+            OtherError(error) => Err(anyhow::anyhow!("{}", error.msg)),
+            _ => Err(anyhow::anyhow!("Profile resources sync error")),
+        }
+    }
+
+    pub async fn get_profile(&mut self, profile: &str) -> Result<ProfileResponse> {
+        let message = ClientMessage::Profile(ProfileMessage {
+            profile: String::from(profile),
+        });
+        match self.send_sync(message).await {
+            Profile(profile) => Ok(profile),
+            OtherError(error) => Err(anyhow::anyhow!("{}", error.msg)),
+            _ => Err(anyhow::anyhow!("Profile sync error!")),
         }
     }
 
