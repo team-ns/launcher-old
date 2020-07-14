@@ -18,17 +18,6 @@ cache:
   paths:
     - target
 
-style:
-  stage: test
-  script:
-    - rustup component add clippy rustfmt
-    - rustc --version
-    - cargo version
-    - cargo fmt -- --check
-    - cargo clippy
-  except:
-    - tags
-
 build: &build
   stage: test
   script:
