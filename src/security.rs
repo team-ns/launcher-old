@@ -11,7 +11,7 @@ use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 use std::io::SeekFrom;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
 
 #[derive(PartialEq, Eq, Hash)]
@@ -113,7 +113,6 @@ impl SecurityManager {
         profiles: Values<String, Profile>,
     ) -> Result<HashMap<String, HashedDirectory>> {
         let mut hashed_profiles = HashMap::new();
-        let hashed_libs = create_hashed_dir("static/libs")?;
 
         for profile in profiles {
             let mut hashed_profile = HashedDirectory::new();
@@ -131,20 +130,27 @@ impl SecurityManager {
     fn hash_libraries(
         profiles: Values<String, Profile>,
     ) -> Result<HashMap<String, HashedDirectory>> {
-        let libs = create_hashed_dir("static/libs")?;
+        let mut libs = HashMap::new();
+        for file in get_files_from_dir("static/libs") {
+            libs.insert(
+                file.path().strip_prefix("static/")?.to_owned(),
+                HashedFile::new(file.path())?,
+            );
+        }
         let mut hashed_libs = HashMap::new();
 
         for profile in profiles {
             let mut hashed_profile_libs = HashedDirectory::new();
             for lib in &profile.libraries {
-                let lib = format!("libs/{}", lib);
+                let lib = PathBuf::from(format!("libs/{}", lib));
                 match libs.get(&lib) {
                     Some(file) => {
-                        hashed_profile_libs.insert(lib.clone(), file.clone());
+                        hashed_profile_libs
+                            .insert(lib.to_string_lossy().as_ref().to_string(), file.clone());
                     }
                     None => {
                         error!(
-                            "Profile '{}' use lib '{}' that doesn't exists in files!",
+                            "Profile '{}' use lib '{:?}' that doesn't exists in files!",
                             profile.name, lib
                         );
                     }
@@ -217,10 +223,10 @@ impl SecurityManager {
                     }
                     match os_type {
                         Some(os_type) => {
-                            hashed_native.get_mut(&os_type).unwrap().insert(
-                                strip(path, "static/")?,
-                                HashedFile::new(path.to_string_lossy().as_ref()),
-                            );
+                            hashed_native
+                                .get_mut(&os_type)
+                                .unwrap()
+                                .insert(strip(path, "static/")?, HashedFile::new(path)?);
                         }
                         None => error!("Unknown file archetype: {:?}!", path),
                     }
@@ -266,10 +272,7 @@ fn fill_map(
 ) -> Result<()> {
     for file in iter {
         let path = file.path();
-        map.insert(
-            strip(path, "static/")?,
-            HashedFile::new(path.to_string_lossy().as_ref()),
-        );
+        map.insert(strip(path, "static/")?, HashedFile::new(path)?);
     }
     Ok(())
 }
