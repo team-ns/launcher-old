@@ -101,7 +101,8 @@ pub async fn validate_profile(
 
 fn validate(profile: &HashedDirectory, game_dir: String) -> Result<ValidationStatus> {
     let profile = profile.iter().filter(|file| {
-        &HashedFile::new(&format!("{}/{}", game_dir, downloader::get_path(file.0))) == file.1
+        HashedFile::new(format!("{}/{}", game_dir, downloader::get_path(file.0)))
+            .map_or(false, |ref hashed_file| hashed_file == file.1)
     });
     let remote = profile_into_remote(profile);
     if remote.is_empty() {
