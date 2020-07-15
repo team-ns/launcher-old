@@ -1,7 +1,9 @@
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
+use std::path::Path;
 
 #[derive(Deserialize, Serialize, Clone, PartialEq)]
 pub struct HashedFile {
@@ -16,14 +18,13 @@ pub struct RemoteFile {
 }
 
 impl HashedFile {
-    pub fn new(path: &str) -> Self {
-        //TODO add Error handling
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
         let mut buffer = Vec::new();
-        File::open(path).unwrap().read_to_end(&mut buffer);
-        HashedFile {
+        File::open(path)?.read_to_end(&mut buffer)?;
+        Ok(HashedFile {
             size: buffer.len() as u64,
             checksum: t1ha::t1ha2_atonce128(buffer.as_slice(), 1),
-        }
+        })
     }
 }
 
