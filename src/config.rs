@@ -1,0 +1,24 @@
+use launcher_api::config::Configurable;
+use path_slash::PathExt;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Config {
+    pub game_dir: String,
+    pub save_data: bool,
+    pub saved_password: String,
+    pub last_name: String,
+    pub websocket: String,
+    pub file_server: String,
+}
+
+impl Configurable for Config {}
+
+impl Default for Config {
+    fn default() -> Self {
+        let config_json = include_str!("../config.json")
+            .replace("%homeDir%", &dirs::home_dir().unwrap().to_slash_lossy());
+        serde_json::from_str(&config_json).unwrap()
+    }
+}

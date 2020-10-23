@@ -1,0 +1,8 @@
+{
+  "gameDir": "%homeDir%/.launcher",
+  "saveData": false,
+  "savedPassword": "",
+  "lastName": "",
+  "websocketAddress": "",
+  "fileServerAddress": ""
+}
