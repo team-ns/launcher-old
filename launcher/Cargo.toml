@@ -34,7 +34,7 @@ version = "0.2.21"
 features = ["full"]
 
 [dependencies.launcher_api]
-git = "https://gitlab.com/nsl_team/launcherapi"
+path = "../launcherapi"
 
 [dependencies.jni]
 git = "https://gitlab.com/nsl_team/jni-rs"
