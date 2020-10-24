@@ -76,3 +76,4 @@ The content of the commit message body should contain:
 - a clear description of the reason for reverting the commit message.
 
 
+[github]: https://github.com/team-ns/launcher
