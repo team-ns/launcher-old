@@ -14,6 +14,7 @@ mod commands;
 mod config;
 mod security;
 mod server;
+mod bundle;
 
 pub struct LaunchServer {
     pub config: Config,
@@ -28,6 +29,7 @@ impl LaunchServer {
             .filter_module("rustyline", log::LevelFilter::Info)
             .filter_level(log::LevelFilter::Debug)
             .init();
+        bundle::unpack_launcher();
         info!("Read config file...");
         let config = Config::get_config(Path::new("config.json")).expect("Can't read config file!");
         info!("Launch server starting...");
