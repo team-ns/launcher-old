@@ -1,10 +1,10 @@
-use log::info;
-use std::path::Path;
-use rust_embed::RustEmbed;
-use std::fs::{File, create_dir_all};
-use std::io::Write;
-use std::borrow::Cow;
 use anyhow::Result;
+use log::info;
+use rust_embed::RustEmbed;
+use std::borrow::Cow;
+use std::fs::{create_dir_all, File};
+use std::io::Write;
+use std::path::Path;
 
 #[derive(RustEmbed)]
 #[folder = "../launcher"]
@@ -14,12 +14,9 @@ struct Launcher;
 #[folder = "../launcherapi"]
 struct LauncherApi;
 
-
 pub fn unpack_launcher() {
-    unpack::<LauncherApi>("launcher")
-        .expect("Can't unpack launcher");
-    unpack::<Launcher>("launcherapi")
-        .expect("Can't unpack api");;
+    unpack::<LauncherApi>("launcher").expect("Can't unpack launcher");
+    unpack::<Launcher>("launcherapi").expect("Can't unpack api");
 }
 
 fn unpack<T: RustEmbed>(folder: &str) -> Result<()> {
@@ -32,8 +29,8 @@ fn unpack<T: RustEmbed>(folder: &str) -> Result<()> {
             if let Some(parent) = file_path.parent() {
                 create_dir_all(parent)?;
             }
-            let mut file = File::create(file_path)
-                .expect(&format!("Can't create file {}", filename));
+            let mut file =
+                File::create(file_path).expect(&format!("Can't create file {}", filename));
             if let Some(bytes) = T::get(filename.as_ref()) {
                 file.write_all(&bytes)?;
             }
