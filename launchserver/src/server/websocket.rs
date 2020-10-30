@@ -3,11 +3,12 @@ use std::sync::Arc;
 use anyhow::Result;
 use futures::{FutureExt, StreamExt};
 use launcher_api::message::{
-    AuthMessage, AuthResponse, ClientMessage, Error, ProfileMessage, ProfileResourcesMessage,
-    ProfileResourcesResponse, ProfileResponse, ProfilesInfoMessage, ProfilesInfoResponse,
-    ServerMessage,
+    AuthMessage, AuthResponse, ClientMessage, Error, JoinServerMessage, ProfileMessage,
+    ProfileResourcesMessage, ProfileResourcesResponse, ProfileResponse, ProfilesInfoMessage,
+    ProfilesInfoResponse, ServerMessage,
 };
 use launcher_api::validation::HashedDirectory;
+use log::debug;
 use log::error;
 use rand::Rng;
 use std::collections::HashMap;
@@ -41,16 +42,19 @@ pub async fn ws_api(ws: WebSocket, server: Arc<RwLock<LaunchServer>>) {
         let msg = match result {
             Ok(msg) => msg,
             Err(e) => {
-                error!("Websocket error");
+                error!("Websocket error: {:?}", e);
                 break;
             }
         };
         if let Ok(json) = msg.to_str() {
-            println!("{:?}", json.to_string());
+            debug!("Client message: {:?}", json.to_string());
             if let Ok(message) = serde_json::from_str::<ClientMessage>(json) {
                 match message {
                     ClientMessage::Auth(auth) => {
                         auth.handle(tx.clone(), server.clone(), &mut client).await;
+                    }
+                    ClientMessage::JoinServer(join) => {
+                        join.handle(tx.clone(), server.clone(), &mut client).await;
                     }
                     ClientMessage::Profile(profile) => {
                         profile
@@ -226,6 +230,38 @@ impl Handle for AuthMessage {
                 }))
             } else {
                 Err(result.message.unwrap())
+            }
+        })
+        .await;
+    }
+}
+
+#[async_trait::async_trait]
+impl Handle for JoinServerMessage {
+    async fn handle(
+        &self,
+        tx: UnboundedSender<Result<Message, warp::Error>>,
+        server: Arc<RwLock<LaunchServer>>,
+        client: &mut Client,
+    ) {
+        let server = server.read().await;
+        send(tx, async {
+            let provide = &server.config.auth;
+            let entry = provide.get_entry(&self.selected_profile).await;
+            match entry {
+                Ok(e) => {
+                    if e.access_token.is_some() && e.access_token.unwrap().eq(&self.access_token) {
+                        provide
+                            .update_server_id(&self.selected_profile, &self.server_id)
+                            .await;
+                        Ok(ServerMessage::Empty)
+                    } else {
+                        Ok(ServerMessage::Error(Error {
+                            msg: String::from("Access token error"),
+                        }))
+                    }
+                }
+                Err(error) => Ok(ServerMessage::Error(error)),
             }
         })
         .await;
