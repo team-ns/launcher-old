@@ -15,6 +15,7 @@ mod config;
 mod security;
 mod server;
 mod bundle;
+mod logger;
 
 pub struct LaunchServer {
     pub config: Config,
@@ -25,10 +26,7 @@ pub struct LaunchServer {
 
 impl LaunchServer {
     async fn new() -> Self {
-        env_logger::builder()
-            .filter_module("rustyline", log::LevelFilter::Info)
-            .filter_level(log::LevelFilter::Debug)
-            .init();
+        logger::configure();
         bundle::unpack_launcher();
         info!("Read config file...");
         let config = Config::get_config(Path::new("config.json")).expect("Can't read config file!");
