@@ -28,8 +28,8 @@ pub async fn start() {
             .user_data(())
             .invoke_handler(move |view, arg| invoke_handler(view, arg, tx.clone()))
             .build()
-            .unwrap();
-        webview.run().unwrap();
+            .expect("Can't create webview runtime");
+        webview.run().expect("Can't run webview runtime");
     });
     tokio::join!(ui_handle, message_handle);
 }
@@ -41,7 +41,8 @@ fn invoke_handler(
 ) -> WVResult<()> {
     let handler = view.handle();
     debug!("Argument from runtime: {}", arg);
-    let message: RuntimeMessage = serde_json::from_str(arg).unwrap();
+    let message: RuntimeMessage =
+        serde_json::from_str(arg).expect("Can't parse message from runtime");
     sender.send((message, handler));
     Ok(())
 }

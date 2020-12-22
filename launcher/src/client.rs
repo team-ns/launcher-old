@@ -131,7 +131,7 @@ impl Client {
         self.out
             .send(serde_json::to_string(&msg).unwrap())
             .await
-            .unwrap();
+            .expect("Can't send message to server");
         match self.recv.recv().await {
             Some(message) => serde_json::from_str(&message).unwrap(),
             None => ServerMessage::Error(Error {
