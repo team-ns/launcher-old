@@ -121,7 +121,7 @@ impl Handle for ProfileResourcesMessage {
         &self,
         tx: UnboundedSender<Result<Message, warp::Error>>,
         server: Arc<RwLock<LaunchServer>>,
-        client: &mut Client,
+        _client: &mut Client,
     ) {
         let server = &*server.read().await;
         send(tx, async {
@@ -160,7 +160,7 @@ impl Handle for ProfileMessage {
         &self,
         tx: UnboundedSender<Result<Message, warp::Error>>,
         server: Arc<RwLock<LaunchServer>>,
-        client: &mut Client,
+        _client: &mut Client,
     ) {
         let server = server.read().await;
         send(tx, async {
@@ -181,7 +181,7 @@ impl Handle for ProfilesInfoMessage {
         &self,
         tx: UnboundedSender<Result<Message, warp::Error>>,
         server: Arc<RwLock<LaunchServer>>,
-        client: &mut Client,
+        _client: &mut Client,
     ) {
         let server = server.read().await;
         send(tx, async {
@@ -199,7 +199,7 @@ impl Handle for AuthMessage {
         &self,
         tx: UnboundedSender<Result<Message, warp::Error>>,
         server: Arc<RwLock<LaunchServer>>,
-        client: &mut Client,
+        _client: &mut Client,
     ) {
         let server = server.read().await;
         //TODO ADD IP FOR LIMITERS
@@ -242,7 +242,7 @@ impl Handle for JoinServerMessage {
         &self,
         tx: UnboundedSender<Result<Message, warp::Error>>,
         server: Arc<RwLock<LaunchServer>>,
-        client: &mut Client,
+        _client: &mut Client,
     ) {
         let server = server.read().await;
         send(tx, async {

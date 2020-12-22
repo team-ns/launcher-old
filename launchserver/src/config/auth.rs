@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use launcher_api::message::Error;
 use futures::TryFutureExt;
+use launcher_api::message::Error;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -96,11 +96,12 @@ impl AuthProvide for JsonAuthProvider {
             }))
             .send()
             .await
-            .map(|v|
+            .map(|v| {
                 if v.status().is_success() {
                     Ok(())
                 } else {
                     return Err(format!("Bad request, status code: {}", v.status()));
+                }
             })
             .unwrap_or(Err("Can't connect".to_string()))
     }

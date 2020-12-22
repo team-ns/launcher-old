@@ -5,12 +5,11 @@ use jni::{InitArgsBuilder, JNIVersion, JavaVM, NativeMethod};
 use launcher_api::profile::Profile;
 use profile::ClientProfile;
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::client::AuthInfo;
-use crate::game::auth::{Java_com_mojang_authlib_yggdrasil_launcherJoinRequest, Java_example};
+use crate::game::auth::Java_com_mojang_authlib_yggdrasil_launcherJoinRequest;
 use std::os::raw::c_void;
-use tokio::runtime::Handle;
 
 pub(crate) mod auth;
 mod profile;

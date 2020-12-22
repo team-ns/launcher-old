@@ -1,14 +1,11 @@
-use crate::client::{AuthInfo, Client};
-use crate::game;
-use crate::game::auth::HANDLE;
-use crate::security::validation;
-use anyhow::Result;
+use crate::client::Client;
+
 use log::debug;
 use messages::RuntimeMessage;
 use once_cell::sync::OnceCell;
 use std::sync::Arc;
-use std::thread;
-use tokio::sync::mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender};
+
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::Mutex;
 use web_view::{Content, Handle, WVResult, WebView};
 

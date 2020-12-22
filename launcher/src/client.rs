@@ -1,8 +1,6 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use launcher_api::config::Configurable;
-use launcher_api::message::ServerMessage::{
-    Auth, Empty, Error as OtherError, Profile, ProfileResources,
-};
+use launcher_api::message::ServerMessage::{Auth, Error as OtherError, Profile, ProfileResources};
 use launcher_api::message::{
     AuthMessage, AuthResponse, ClientMessage, JoinServerMessage, ProfileMessage, ProfileResponse,
     ServerMessage,
@@ -12,14 +10,9 @@ use launcher_api::validation::OsType;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::config::Config;
-use crate::runtime::CLIENT;
+
 use crate::security;
 use crate::security::SecurityManager;
-use rsocket_rust::error::RSocketError;
-use rsocket_rust::prelude::Client as RSocketClient;
-use rsocket_rust::prelude::{Payload, PayloadBuilder, RSocket, RSocketFactory};
-use rsocket_rust::runtime::DefaultSpawner;
-use rsocket_rust_transport_websocket::WebsocketClientTransport;
 use uuid::Uuid;
 
 pub mod downloader;
@@ -63,7 +56,7 @@ impl Client {
         let ws = yarws::Client::new(address)
             .connect()
             .await
-            .map_err(|e| anyhow!("Connection error"))?
+            .map_err(|_e| anyhow!("Connection error"))?
             .into_text();
         Ok(ws.into_channel().await)
     }

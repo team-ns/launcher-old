@@ -1,15 +1,11 @@
-use crate::runtime::CLIENT;
-use anyhow::Error;
 use jni::objects::{JObject, JString};
-use jni::{JNIEnv, NativeMethod};
-use launcher_api::message::{ClientMessage, JoinServerMessage, ServerMessage};
-use once_cell::sync::{Lazy, OnceCell};
+use jni::JNIEnv;
+
+use once_cell::sync::Lazy;
 use std::str::FromStr;
-use std::sync::mpsc::{Receiver, RecvError, Sender};
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::thread;
-use tokio::runtime::{Handle, Runtime};
-use tokio::time::Duration;
+
 use uuid::Uuid;
 
 pub static CHANNEL_GET: Lazy<(

@@ -1,3 +1,4 @@
+use log::info;
 use rustyline::completion::{extract_word, Completer};
 use rustyline::error::ReadlineError;
 use rustyline::Config as LineConfig;
@@ -7,7 +8,6 @@ use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::process::exit;
 use std::sync::Arc;
-use log::info;
 use tokio::sync::RwLock;
 
 use crate::server::profile;
@@ -142,7 +142,7 @@ pub fn rehash(server: &mut LaunchServer, args: &[&str]) {
     server.security.rehash(server.profiles.values(), args);
 }
 
-pub fn sync(server: &mut LaunchServer, args: &[&str]) {
+pub fn sync(server: &mut LaunchServer, _args: &[&str]) {
     let (profiles, profiles_info) = profile::get_profiles();
     server.profiles = profiles;
     server.profiles_info = profiles_info;

@@ -3,16 +3,14 @@ use crate::game;
 use crate::game::auth::{CHANNEL_GET, CHANNEL_SEND};
 use crate::runtime::CLIENT;
 use crate::security::validation;
-use anyhow::{Error, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::process::exit;
-use std::str::FromStr;
+
 use std::sync::Arc;
-use std::thread;
-use tokio::runtime::Handle as TokioHandle;
+
 use tokio::sync::Mutex;
 use tokio::time::Duration;
-use uuid::Uuid;
+
 use web_view::Handle;
 
 #[macro_export]

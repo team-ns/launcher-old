@@ -1,7 +1,7 @@
 use anyhow::Result;
 use log::info;
 use rust_embed::RustEmbed;
-use std::borrow::Cow;
+
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::path::Path;
