@@ -1,108 +1,75 @@
-use anyhow::Result;
-use messages::RuntimeMessage;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use web_view::{Content, Handle};
-
 use crate::client::{AuthInfo, Client};
 use crate::game;
+use crate::game::auth::HANDLE;
 use crate::security::validation;
+use anyhow::Result;
+use log::debug;
+use messages::RuntimeMessage;
+use once_cell::sync::OnceCell;
+use std::sync::Arc;
+use std::thread;
+use tokio::sync::mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender};
+use tokio::sync::Mutex;
+use web_view::{Content, Handle, WVResult, WebView};
 
 mod messages;
 
-#[macro_export]
-macro_rules! handle_error {
-    ($handler:expr, $result:expr) => {
-        if let Err(error) = $result {
-            $handler.dispatch(move |w| {
-                w.eval(&format!("app.backend.error('{}')", error));
-                Ok(())
-            });
-        }
-    };
-}
+pub static CLIENT: OnceCell<Arc<Mutex<Client>>> = OnceCell::new();
 
 pub async fn start() {
-    let socket: Arc<Mutex<Client>> =
-        Arc::new(Mutex::new(Client::new("ws://127.0.0.1:9090/api/").await));
-    let webview = web_view::builder()
-        .title("NSLauncher")
-        .content(Content::Html(include_str!("../runtime/index.html")))
-        .size(1000, 600)
-        .resizable(false)
-        .debug(true)
-        .user_data(())
-        .invoke_handler(move |view, arg| {
-            let handler = view.handle();
-            let socket = Arc::clone(&socket);
-            let message: RuntimeMessage = serde_json::from_str(arg).unwrap();
-            match message {
-                RuntimeMessage::Login { login, password } => {
-                    tokio::spawn(async move {
-                        let mut client = socket.lock().await;
-                        match client.auth(&login, &password).await {
-                            Ok(response) => {
-                                client.auth_info = Some(AuthInfo {
-                                    access_token: response.access_token,
-                                    uuid: response.uuid,
-                                    username: login,
-                                });
-                                handler.dispatch(|w| {
-                                    w.eval("app.backend.logined()");
-                                    Ok(())
-                                });
-                            }
-                            Err(error) => {
-                                handler.dispatch(move |w| {
-                                    w.eval(&format!("app.backend.error('{}')", error));
-                                    Ok(())
-                                });
-                            }
-                        }
-                    });
-                }
-                RuntimeMessage::Play { profile } => {
-                    tokio::spawn(async move {
-                        async fn start_client(
-                            handler: Handle<()>,
-                            socket: Arc<Mutex<Client>>,
-                            profile: String,
-                        ) -> Result<()> {
-                            let mut client = socket.lock().await;
-                            let resources = client.get_resources(&profile).await?;
-                            validation::validate_profile(
-                                client.config.game_dir.clone(),
-                                profile.clone(),
-                                resources,
-                                client.config.file_server.clone(),
-                                handler.clone(),
-                            )
-                            .await?;
-                            let profile = client.get_profile(&profile).await?.profile;
-                            let jvm = game::create_jvm(profile.clone(), &client.config.game_dir)?;
-                            if let Some(info) = client.auth_info.clone() {
-                                //jvm watcher start
-                                handler.dispatch(|w| {
-                                    w.exit();
-                                    Ok(())
-                                });
-                                game::start(jvm, profile, info, &client.config.game_dir)?
-                            } else {
-                                return Err(anyhow::anyhow!("Start game before auth!"));
-                            }
-                            Ok(())
-                        }
-                        handle_error!(
-                            handler,
-                            start_client(handler.clone(), socket, profile).await
-                        );
-                    });
-                }
-            };
-            Ok(())
-        })
-        .build()
-        .unwrap();
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let message_handle = tokio::task::spawn(async move {
+        message_loop(rx).await;
+    });
+    let ui_handle = tokio::task::spawn_blocking(move || {
+        let webview = web_view::builder()
+            .title("NSLauncher")
+            .content(Content::Html(include_str!("../runtime/index.html")))
+            .size(1000, 600)
+            .resizable(false)
+            .debug(true)
+            .user_data(())
+            .invoke_handler(move |view, arg| invoke_handler(view, arg, tx.clone()))
+            .build()
+            .unwrap();
+        webview.run().unwrap();
+    });
+    tokio::join!(ui_handle, message_handle);
+}
 
-    let value = webview.run().unwrap();
+fn invoke_handler(
+    view: &mut WebView<()>,
+    arg: &str,
+    sender: UnboundedSender<(RuntimeMessage, Handle<()>)>,
+) -> WVResult<()> {
+    let handler = view.handle();
+    debug!("Argument from runtime: {}", arg);
+    let message: RuntimeMessage = serde_json::from_str(arg).unwrap();
+    sender.send((message, handler));
+    Ok(())
+}
+
+async fn message_loop(mut recv: UnboundedReceiver<(RuntimeMessage, Handle<()>)>) {
+    loop {
+        match recv.recv().await {
+            None => {}
+            Some(message) => {
+                let handler = message.1;
+                let message = message.0;
+                match message {
+                    RuntimeMessage::Login { login, password } => {
+                        let client = Arc::clone(CLIENT.get().expect("Client not found"));
+                        messages::login(login, password, client, handler).await;
+                    }
+                    RuntimeMessage::Play { profile } => {
+                        let client = Arc::clone(CLIENT.get().expect("Client not found"));
+                        messages::play(profile, client, handler).await;
+                    }
+                    RuntimeMessage::Ready => {
+                        messages::ready(handler).await;
+                    }
+                };
+            }
+        };
+    }
 }

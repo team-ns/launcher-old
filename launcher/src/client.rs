@@ -1,16 +1,26 @@
-use anyhow::Result;
+use anyhow::{anyhow, Context, Result};
 use launcher_api::config::Configurable;
-use launcher_api::message::ServerMessage::{Auth, Error as OtherError, Profile, ProfileResources};
+use launcher_api::message::ServerMessage::{
+    Auth, Empty, Error as OtherError, Profile, ProfileResources,
+};
 use launcher_api::message::{
-    AuthMessage, AuthResponse, ClientMessage, ProfileMessage, ProfileResponse, ServerMessage,
+    AuthMessage, AuthResponse, ClientMessage, JoinServerMessage, ProfileMessage, ProfileResponse,
+    ServerMessage,
 };
 use launcher_api::message::{Error, ProfileResourcesMessage, ProfileResourcesResponse};
 use launcher_api::validation::OsType;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::config::Config;
+use crate::runtime::CLIENT;
 use crate::security;
 use crate::security::SecurityManager;
+use rsocket_rust::error::RSocketError;
+use rsocket_rust::prelude::Client as RSocketClient;
+use rsocket_rust::prelude::{Payload, PayloadBuilder, RSocket, RSocketFactory};
+use rsocket_rust::runtime::DefaultSpawner;
+use rsocket_rust_transport_websocket::WebsocketClientTransport;
+use uuid::Uuid;
 
 pub mod downloader;
 
@@ -30,26 +40,39 @@ pub struct AuthInfo {
 }
 
 impl Client {
-    pub async fn new(address: &str) -> Self {
-        let ws = yarws::connect(address, yarws::log::config())
-            .await
-            .unwrap()
-            .into_text();
-        let (s, r) = ws.into_channel().await;
-        Client {
+    pub async fn new() -> Result<Self> {
+        let config = Config::get_config(
+            dirs::config_dir()
+                .unwrap()
+                .join("nsl")
+                .join("config.json")
+                .as_path(),
+        )?;
+        let address: &str = &config.websocket;
+        let (s, r) = Client::connect(&address).await?;
+        Ok(Client {
             security: security::get_manager(),
             recv: r,
             out: s,
             auth_info: None,
-            config: Config::get_config(
-                dirs::config_dir()
-                    .unwrap()
-                    .join("nsl")
-                    .join("config.json")
-                    .as_path(),
-            )
-            .unwrap(),
-        }
+            config,
+        })
+    }
+
+    async fn connect(address: &str) -> Result<(Sender<String>, Receiver<String>)> {
+        let ws = yarws::Client::new(address)
+            .connect()
+            .await
+            .map_err(|e| anyhow!("Connection error"))?
+            .into_text();
+        Ok(ws.into_channel().await)
+    }
+
+    pub async fn reconnect(&mut self) -> Result<()> {
+        let (s, r) = Client::connect(&self.config.websocket).await?;
+        self.recv = r;
+        self.out = s;
+        Ok(())
     }
 
     pub async fn auth(&mut self, login: &str, password: &str) -> Result<AuthResponse> {
@@ -60,6 +83,19 @@ impl Client {
         match self.send_sync(message).await {
             Auth(auth) => Ok(auth),
             OtherError(error) => Err(anyhow::anyhow!("{}", error.msg)),
+            _ => Err(anyhow::anyhow!("Auth not found")),
+        }
+    }
+
+    pub async fn join(&mut self, token: &str, profile: &Uuid, server: &str) -> Result<()> {
+        let message = ClientMessage::JoinServer(JoinServerMessage {
+            access_token: String::from(token),
+            selected_profile: profile.clone(),
+            server_id: String::from(server),
+        });
+        match self.send_sync(message).await {
+            ServerMessage::Empty => Ok(()),
+            ServerMessage::Error(error) => Err(anyhow::anyhow!("{}", error.msg)),
             _ => Err(anyhow::anyhow!("Auth not found")),
         }
     }
@@ -106,7 +142,7 @@ impl Client {
         match self.recv.recv().await {
             Some(message) => serde_json::from_str(&message).unwrap(),
             None => ServerMessage::Error(Error {
-                msg: "what".to_string(),
+                msg: "Server Disconnected".to_string(),
             }),
         }
     }
