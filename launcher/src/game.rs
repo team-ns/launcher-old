@@ -1,14 +1,17 @@
 use anyhow::Result;
 use dlopen::wrapper::Container;
 use jni::djl::JvmLibrary;
-use jni::{InitArgsBuilder, JNIVersion, JavaVM};
+use jni::{InitArgsBuilder, JNIVersion, JavaVM, NativeMethod};
 use launcher_api::profile::Profile;
 use profile::ClientProfile;
 use std::env;
 use std::path::PathBuf;
 
 use crate::client::AuthInfo;
+use crate::game::auth::Java_com_mojang_authlib_yggdrasil_launcherJoinRequest;
+use std::os::raw::c_void;
 
+pub(crate) mod auth;
 mod profile;
 
 #[cfg(target_os = "windows")]
@@ -55,6 +58,15 @@ pub fn create_jvm(profile: Profile, dir: &str) -> Result<JavaVM> {
 
 pub fn start(jvm: JavaVM, profile: Profile, auth_info: AuthInfo, dir: &str) -> Result<()> {
     let jni_env = jvm.attach_current_thread_permanently()?;
+    let method = NativeMethod {
+        name: "launcherJoinRequest".into(),
+        sig: "(Lcom/mojang/authlib/yggdrasil/request/JoinMinecraftServerRequest;)V".into(),
+        fn_ptr: Java_com_mojang_authlib_yggdrasil_launcherJoinRequest as *mut c_void,
+    };
+    jni_env.register_native_methods(
+        "com/mojang/authlib/yggdrasil/YggdrasilMinecraftSessionService",
+        &vec![method],
+    );
     env::set_current_dir(profile.get_client_dir(dir))?;
     jni_env
         .call_static_method(

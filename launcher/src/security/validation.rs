@@ -51,7 +51,7 @@ macro_rules! exists {
 
 pub async fn validate_profile(
     game_dir: String,
-    profile_name: String,
+    _profile_name: String,
     resources: ProfileResourcesResponse,
     file_server: String,
     handler: Handle<()>,

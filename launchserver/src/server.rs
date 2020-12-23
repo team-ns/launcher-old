@@ -1,6 +1,6 @@
-use std::sync::Arc;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use std::sync::Arc;
 use tokio::sync::RwLock;
 use warp::Filter;
 
@@ -8,8 +8,8 @@ use crate::server::auth::{has_join, join, HasJoinRequest};
 use crate::server::websocket::ws_api;
 use crate::LaunchServer;
 
-pub mod profile;
 mod auth;
+pub mod profile;
 mod websocket;
 
 pub async fn start(data: Arc<RwLock<LaunchServer>>) -> std::io::Result<()> {
@@ -41,7 +41,7 @@ pub async fn start(data: Arc<RwLock<LaunchServer>>) -> std::io::Result<()> {
         .and_then(has_join);
     let routes = dir.or(ws).or(join).or(has_joined);
     warp::serve(routes)
-        .run(SocketAddr::from_str(&config.address).unwrap())
+        .run(SocketAddr::from_str(&config.address).expect("Can't parse server address"))
         .await;
     Ok(())
 }

@@ -10,12 +10,12 @@ use tokio::sync::RwLock;
 use crate::config::Config;
 use crate::security::SecurityManager;
 
+mod bundle;
 mod commands;
 mod config;
+mod logger;
 mod security;
 mod server;
-mod bundle;
-mod logger;
 
 pub struct LaunchServer {
     pub config: Config,
@@ -47,6 +47,6 @@ impl LaunchServer {
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let data = Arc::new(RwLock::new(LaunchServer::new().await));
-    commands::start(data.clone()).await;
-    server::start(data).await
+    tokio::join!(commands::start(data.clone()), server::start(data.clone()));
+    Ok(())
 }

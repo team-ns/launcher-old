@@ -1,8 +1,8 @@
-use std::path::Path;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::fs;
 use std::fs::OpenOptions;
-use serde::Serialize;
-use serde::de::DeserializeOwned;
+use std::path::Path;
 
 pub trait Configurable: Default + Serialize + DeserializeOwned {
     fn get_config(config_path: &Path) -> std::io::Result<Self> {
@@ -18,7 +18,7 @@ pub trait Configurable: Default + Serialize + DeserializeOwned {
                 let config = Self::default();
                 serde_json::to_writer_pretty(&config_file, &config)?;
                 Ok(config)
-            },
+            }
         }
     }
 }

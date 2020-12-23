@@ -3,6 +3,6 @@
   "saveData": false,
   "savedPassword": "",
   "lastName": "",
-  "websocketAddress": "",
-  "fileServerAddress": ""
+  "websocket": "",
+  "fileServer": ""
 }

@@ -21,11 +21,11 @@ pub fn configure() {
 
     let root_builder = Root::builder().appender("logfile").appender("stdout");
 
-    let mut config_builder = Config::builder()
+    let config_builder = Config::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout)))
         .appender(Appender::builder().build("logfile", Box::new(logfile)));
 
-    let mut config = if cfg!(debug_assertions) {
+    let config = if cfg!(debug_assertions) {
         config_builder
             .logger(Logger::builder().build("rustyline", LevelFilter::Info))
             .build(root_builder.build(LevelFilter::Debug))

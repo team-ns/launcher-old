@@ -1,8 +1,8 @@
 use launcher_api::config::Configurable;
 use launcher_api::message::Error;
+use log::error;
 use serde::{Deserialize, Serialize};
 use std::clone::Clone;
-use log::error;
 use uuid::Uuid;
 
 use crate::config::auth::{AuthProvide, AuthResult, Entry};
@@ -65,7 +65,7 @@ impl AuthProvider {
             Empty => {
                 error!("Auth provider not found, check your config!");
                 Err("Can't authorize account. Please contact to administration!".to_string())
-            },
+            }
             JSON(json) => {
                 json.auth(login, password, ip).await
                 /*let client = reqwest::Client::new();
@@ -144,7 +144,7 @@ impl AuthProvider {
             Empty => {
                 error!("Auth provider not found, check your config!");
                 Err("Can't authorize account. Please contact to administration!".to_string())
-            },
+            }
             JSON(json) => {
                 json.update_access_token(uuid, token).await
                 /*let client = reqwest::Client::new();

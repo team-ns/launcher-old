@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::profile::{Profile, ProfileInfo};
 use crate::validation::{HashedDirectory, OsType};
@@ -6,6 +7,7 @@ use crate::validation::{HashedDirectory, OsType};
 #[derive(Deserialize, Serialize)]
 pub enum ClientMessage {
     Auth(AuthMessage),
+    JoinServer(JoinServerMessage),
     ProfileResources(ProfileResourcesMessage),
     Profile(ProfileMessage),
     ProfilesInfo(ProfilesInfoMessage),
@@ -17,6 +19,7 @@ pub enum ServerMessage {
     ProfileResources(ProfileResourcesResponse),
     Profile(ProfileResponse),
     ProfilesInfo(ProfilesInfoResponse),
+    Empty,
     Error(Error),
 }
 
@@ -24,6 +27,13 @@ pub enum ServerMessage {
 pub struct AuthMessage {
     pub login: String,
     pub password: String,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct JoinServerMessage {
+    pub access_token: String,
+    pub selected_profile: Uuid,
+    pub server_id: String,
 }
 
 #[derive(Deserialize, Serialize)]
