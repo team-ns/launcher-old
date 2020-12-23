@@ -23,7 +23,6 @@ hyper-tls = "0.4.1"
 futures = "0.3"
 anyhow = "1.0.31"
 notify = "5.0.0-pre.2"
-async-trait = "0.1"
 once_cell = "1.5"
 uuid = "0.8"
 log = "0.4"
@@ -43,6 +42,13 @@ path = "../launcherapi"
 [dependencies.jni]
 git = "https://gitlab.com/nsl_team/jni-rs"
 branch = "dynamic"
+
+[target.'cfg(windows)'.dependencies.winapi]
+version = "0.3"
+features = ["winnt"]
+
+[target.'cfg(linux)'.dependencies]
+uname = "0.1"
 
 [profile.release]
 opt-level = 'z'

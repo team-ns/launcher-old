@@ -1,6 +1,6 @@
 use anyhow::Result;
 use launcher_api::message::ProfileResourcesResponse;
-use launcher_api::validation::{HashedDirectory, HashedFile, RemoteFile};
+use launcher_api::validation::{HashedDirectory, HashedFile, OsType, RemoteFile};
 use std::path::PathBuf;
 use web_view::Handle;
 
@@ -120,4 +120,39 @@ fn profile_into_remote<'a>(
         size: file.1.size,
     })
     .collect()
+}
+
+pub fn get_os_type() -> OsType {
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    let os_type = OsType::MacOSX64;
+    #[cfg(all(target_os = "linux"))]
+    let os_type = {
+        use uname;
+        let info = uname::uname().expect("Can't get os info");
+
+        Ok(match info.machine.as_ref() {
+            "i686" => OsType::LinuxX32,
+            "x86_64" => OsType::LinuxX64,
+            _ => unreachable!(),
+        })
+    };
+    #[cfg(all(target_os = "windows"))]
+    let os_type = {
+        use std::mem;
+        use winapi::um::sysinfoapi::{GetNativeSystemInfo, SYSTEM_INFO_u_s, SYSTEM_INFO};
+        use winapi::um::winnt::{PROCESSOR_ARCHITECTURE_AMD64, PROCESSOR_ARCHITECTURE_INTEL};
+
+        let mut system_info: SYSTEM_INFO = unsafe { mem::zeroed() };
+
+        unsafe { GetNativeSystemInfo(&mut system_info) };
+
+        let s: &SYSTEM_INFO_u_s = unsafe { system_info.u.s() };
+
+        match s.wProcessorArchitecture {
+            PROCESSOR_ARCHITECTURE_INTEL => OsType::WindowsX32,
+            PROCESSOR_ARCHITECTURE_AMD64 => OsType::WindowsX64,
+            _ => unreachable!(),
+        }
+    };
+    os_type
 }

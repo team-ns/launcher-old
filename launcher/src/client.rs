@@ -12,6 +12,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use crate::config::Config;
 
 use crate::security;
+use crate::security::validation::get_os_type;
 use crate::security::SecurityManager;
 use uuid::Uuid;
 
@@ -94,20 +95,9 @@ impl Client {
     }
 
     pub async fn get_resources(&mut self, profile: &str) -> Result<ProfileResourcesResponse> {
-        #[cfg(all(target_os = "linux", target_arch = "x86"))]
-        let os_type = OsType::LinuxX32;
-        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-        let os_type = OsType::LinuxX64;
-        #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-        let os_type = OsType::MacOSX64;
-        #[cfg(all(target_os = "windows", target_arch = "x86"))]
-        let os_type = OsType::WindowsX32;
-        #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
-        let os_type = OsType::WindowsX64;
-
         let message = ClientMessage::ProfileResources(ProfileResourcesMessage {
             profile: String::from(profile),
-            os_type,
+            os_type: get_os_type(),
         });
         match self.send_sync(message).await {
             ProfileResources(profile) => Ok(profile),
