@@ -9,7 +9,7 @@ use launcher_api::message::{Error, ProfileResourcesMessage, ProfileResourcesResp
 
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use crate::config::Config;
+use crate::config::{Config, CONFIG};
 
 use crate::security;
 use crate::security::validation::get_os_type;
@@ -23,7 +23,6 @@ pub struct Client {
     recv: Receiver<String>,
     security: SecurityManager,
     pub auth_info: Option<AuthInfo>,
-    pub config: Config,
 }
 
 #[derive(Clone)]
@@ -35,21 +34,13 @@ pub struct AuthInfo {
 
 impl Client {
     pub async fn new() -> Result<Self> {
-        let config = Config::get_config(
-            dirs::config_dir()
-                .unwrap()
-                .join("nsl")
-                .join("config.json")
-                .as_path(),
-        )?;
-        let address: &str = &config.websocket;
+        let address: &str = &CONFIG.websocket;
         let (s, r) = Client::connect(&address).await?;
         Ok(Client {
             security: security::get_manager(),
             recv: r,
             out: s,
             auth_info: None,
-            config,
         })
     }
 
@@ -63,7 +54,7 @@ impl Client {
     }
 
     pub async fn reconnect(&mut self) -> Result<()> {
-        let (s, r) = Client::connect(&self.config.websocket).await?;
+        let (s, r) = Client::connect(&CONFIG.websocket).await?;
         self.recv = r;
         self.out = s;
         Ok(())

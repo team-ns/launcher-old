@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 
-use crate::config::{Settings, SETTINGS};
+use crate::config::{Settings, CONFIG, SETTINGS};
 
 use nfd2::Response;
 use path_slash::PathBufExt;
@@ -141,16 +141,17 @@ pub async fn start_client(
 ) -> Result<()> {
     let mut client = socket.lock().await;
     let resources = client.get_resources(&profile).await?;
+    let settings = SETTINGS.get().expect("Can't get settings").lock().await;
+    let game_dir = settings.game_dir.clone();
     validation::validate_profile(
-        client.config.game_dir.clone(),
+        game_dir.clone(),
         profile.clone(),
         resources,
-        client.config.file_server.clone(),
+        CONFIG.file_server.clone(),
         handler.clone(),
     )
     .await?;
     let profile = client.get_profile(&profile).await?.profile;
-    let game_dir = client.config.game_dir.clone();
     let auth_info = client.auth_info.clone();
     drop(client);
     let game_handle = tokio::task::spawn_blocking(move || {
