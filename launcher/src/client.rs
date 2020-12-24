@@ -1,12 +1,12 @@
 use anyhow::{anyhow, Result};
 use launcher_api::config::Configurable;
-use launcher_api::message::ServerMessage::{Auth, Error as OtherError, Profile, ProfileResources};
+
 use launcher_api::message::{
     AuthMessage, AuthResponse, ClientMessage, JoinServerMessage, ProfileMessage, ProfileResponse,
-    ServerMessage,
+    ProfilesInfoMessage, ProfilesInfoResponse, ServerMessage,
 };
 use launcher_api::message::{Error, ProfileResourcesMessage, ProfileResourcesResponse};
-use launcher_api::validation::OsType;
+
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::config::Config;
@@ -69,14 +69,18 @@ impl Client {
         Ok(())
     }
 
+    pub async fn get_encrypted_password(&self, password: &str) -> String {
+        self.security.encrypt(password)
+    }
+
     pub async fn auth(&mut self, login: &str, password: &str) -> Result<AuthResponse> {
         let message = ClientMessage::Auth(AuthMessage {
             login: String::from(login),
-            password: self.security.encrypt(password),
+            password: password.to_string(),
         });
         match self.send_sync(message).await {
-            Auth(auth) => Ok(auth),
-            OtherError(error) => Err(anyhow::anyhow!("{}", error.msg)),
+            ServerMessage::Auth(auth) => Ok(auth),
+            ServerMessage::Error(error) => Err(anyhow::anyhow!("{}", error.msg)),
             _ => Err(anyhow::anyhow!("Auth not found")),
         }
     }
@@ -100,9 +104,18 @@ impl Client {
             os_type: get_os_type(),
         });
         match self.send_sync(message).await {
-            ProfileResources(profile) => Ok(profile),
-            OtherError(error) => Err(anyhow::anyhow!("{}", error.msg)),
+            ServerMessage::ProfileResources(profile) => Ok(profile),
+            ServerMessage::Error(error) => Err(anyhow::anyhow!("{}", error.msg)),
             _ => Err(anyhow::anyhow!("Profile resources sync error")),
+        }
+    }
+
+    pub async fn get_profiles(&mut self) -> Result<ProfilesInfoResponse> {
+        let message = ClientMessage::ProfilesInfo(ProfilesInfoMessage);
+        match self.send_sync(message).await {
+            ServerMessage::ProfilesInfo(info) => Ok(info),
+            ServerMessage::Error(error) => Err(anyhow::anyhow!("{}", error.msg)),
+            _ => Err(anyhow::anyhow!("Profiles info sync error")),
         }
     }
 
@@ -111,8 +124,8 @@ impl Client {
             profile: String::from(profile),
         });
         match self.send_sync(message).await {
-            Profile(profile) => Ok(profile),
-            OtherError(error) => Err(anyhow::anyhow!("{}", error.msg)),
+            ServerMessage::Profile(profile) => Ok(profile),
+            ServerMessage::Error(error) => Err(anyhow::anyhow!("{}", error.msg)),
             _ => Err(anyhow::anyhow!("Profile sync error!")),
         }
     }
