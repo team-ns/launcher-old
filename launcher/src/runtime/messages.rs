@@ -11,34 +11,79 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 
+use crate::config::{Settings, SETTINGS};
+
+use nfd2::Response;
+use path_slash::PathBufExt;
+
 use web_view::Handle;
 
-#[macro_export]
-macro_rules! handle_error {
-    ($handler:expr, $result:expr) => {
-        if let Err(error) = $result {
-            $handler.dispatch(move |w| {
-                w.eval(&format!(
-                    r#"app.backend.error("{}")"#,
-                    error.to_string().replace(r#"""#, r#"""#)
-                ));
-                Ok(())
-            });
-        }
-    };
-}
-
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum RuntimeMessage {
     Ready,
-    Login { login: String, password: String },
-    Play { profile: String },
+    #[serde(rename_all = "camelCase")]
+    Login {
+        login: String,
+        password: String,
+        remember_me: bool,
+    },
+    Logout,
+    Play {
+        profile: String,
+    },
+    SelectGameDir,
+    SaveSettings(Settings),
 }
 
-pub async fn ready(handler: Handle<()>) {
+pub async fn login_user(
+    client: &mut Client,
+    login: &str,
+    password: &str,
+    handler: Handle<()>,
+) -> Result<()> {
+    let response = client.auth(login, password).await?;
+    client.auth_info = Some(AuthInfo {
+        access_token: response.access_token,
+        uuid: response.uuid,
+        username: login.to_string(),
+    });
+    let profiles = client.get_profiles().await?;
+    let json = serde_json::to_string(&profiles.profiles_info)?;
+    handler.dispatch(move |w| {
+        w.eval(&format!(
+            r#"app.backend.logined('{}')"#,
+            json.to_string().replace(r#"""#, r#"""#)
+        ));
+        Ok(())
+    })?;
+    Ok(())
+}
+
+pub async fn ready(handler: Handle<()>) -> Result<()> {
     match Client::new().await {
         Ok(c) => {
             CLIENT.set(Arc::new(Mutex::new(c)));
+            let settings = match Settings::load() {
+                Ok(s) => s,
+                Err(_e) => {
+                    let s = Settings::default();
+                    s.save();
+                    s
+                }
+            };
+            update_settings(&settings, handler.clone()).await;
+            SETTINGS.set(Arc::new(Mutex::new(settings.clone())));
+            if settings.save_data {
+                let login = &settings.last_name.expect("Can't get login");
+                let password = &settings.saved_password.expect("Can't get saved password");
+                let mut client = CLIENT.get().expect("Can't get client").lock().await;
+                login_user(&mut client, login, password, handler.clone()).await?;
+            }
+            handler.dispatch(|w| {
+                w.eval("app.backend.ready()");
+                Ok(())
+            });
         }
         Err(e) => {
             handler.dispatch(move |w| {
@@ -55,47 +100,41 @@ pub async fn ready(handler: Handle<()>) {
             });
         }
     }
+    Ok(())
 }
 
 pub async fn login(
     login: String,
     password: String,
+    remember: bool,
     socket: Arc<Mutex<Client>>,
     handler: Handle<()>,
-) {
+) -> Result<()> {
     let mut client = socket.lock().await;
-    match client.auth(&login, &password).await {
-        Ok(response) => {
-            client.auth_info = Some(AuthInfo {
-                access_token: response.access_token,
-                uuid: response.uuid,
-                username: login,
-            });
-            handler.dispatch(|w| {
-                w.eval("app.backend.logined()");
-                Ok(())
-            });
-        }
-        Err(error) => {
-            handler.dispatch(move |w| {
-                w.eval(&format!(
-                    r#"app.backend.error("{}")"#,
-                    error.to_string().replace(r#"""#, r#"""#)
-                ));
-                Ok(())
-            });
-        }
+    let password = client.get_encrypted_password(&password).await;
+    login_user(&mut client, &login, &password, handler.clone()).await?;
+    if remember {
+        let mut current_settings = SETTINGS.get().expect("Can't take settings").lock().await;
+        current_settings.last_name = Some(login.clone());
+        current_settings.saved_password = Some(password.clone());
+        current_settings.save_data = true;
+        current_settings.save();
     }
+    Ok(())
 }
 
-pub async fn play(profile: String, socket: Arc<Mutex<Client>>, handler: Handle<()>) {
-    handle_error!(
-        handler,
-        start_client(handler.clone(), socket, profile).await
-    );
+pub async fn logout(client: Arc<Mutex<Client>>) -> Result<()> {
+    let mut client = client.lock().await;
+    client.auth_info = None;
+    let mut current_settings = SETTINGS.get().expect("Can't take settings").lock().await;
+    current_settings.save_data = false;
+    current_settings.last_name = None;
+    current_settings.saved_password = None;
+    current_settings.save()?;
+    Ok(())
 }
 
-async fn start_client(
+pub async fn start_client(
     handler: Handle<()>,
     socket: Arc<Mutex<Client>>,
     profile: String,
@@ -138,6 +177,44 @@ async fn start_client(
             };
         }
     });
-    tokio::join!(join_handle, game_handle);
+    tokio::try_join!(game_handle, join_handle);
+    Ok(())
+}
+
+pub async fn select_game_dir(handler: Handle<()>) -> Result<()> {
+    let mut current_settings = SETTINGS
+        .get()
+        .expect("Can't take settings")
+        .try_lock()
+        .map_err(|_e| anyhow::anyhow!("Вы уже выбираете папку!"))?;
+    let response = nfd2::open_pick_folder(None)?;
+    match response {
+        Response::Okay(folder) => {
+            current_settings.game_dir = folder.to_slash_lossy();
+            current_settings.save();
+            update_settings(&current_settings, handler).await;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+pub async fn save_settings(settings: Settings, handler: Handle<()>) -> Result<()> {
+    settings.save()?;
+    update_settings(&settings, handler).await;
+    SETTINGS.set(Arc::new(Mutex::new(settings)));
+    Ok(())
+}
+
+pub async fn update_settings(settings: &Settings, handler: Handle<()>) -> Result<()> {
+    let settings = settings.clone();
+    let json = serde_json::to_string(&settings)?;
+    handler.dispatch(move |w| {
+        w.eval(&format!(
+            r#"app.backend.settings('{}')"#,
+            json.to_string().replace(r#"""#, r#"""#)
+        ));
+        Ok(())
+    });
     Ok(())
 }
