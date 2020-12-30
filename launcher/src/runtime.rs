@@ -7,11 +7,27 @@ use std::sync::Arc;
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::Mutex;
+
 use web_view::{Content, Handle, WVResult, WebView};
 
 mod messages;
 
 pub static CLIENT: OnceCell<Arc<Mutex<Client>>> = OnceCell::new();
+
+#[macro_export]
+macro_rules! handle_error {
+    ($handler:expr, $result:expr) => {
+        if let Err(error) = $result {
+            $handler.dispatch(move |w| {
+                w.eval(&format!(
+                    r#"app.backend.error("{}")"#,
+                    error.to_string().replace(r#"""#, r#"""#)
+                ));
+                Ok(())
+            });
+        }
+    };
+}
 
 pub async fn start() {
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
@@ -31,7 +47,8 @@ pub async fn start() {
             .expect("Can't create webview runtime");
         webview.run().expect("Can't run webview runtime");
     });
-    tokio::join!(ui_handle, message_handle);
+    ui_handle.await;
+    drop(message_handle);
 }
 
 fn invoke_handler(
@@ -53,18 +70,42 @@ async fn message_loop(mut recv: UnboundedReceiver<(RuntimeMessage, Handle<()>)>)
             None => {}
             Some(message) => {
                 let handler = message.1;
+                let error_handler = handler.clone();
                 let message = message.0;
                 match message {
-                    RuntimeMessage::Login { login, password } => {
+                    RuntimeMessage::Login {
+                        login,
+                        password,
+                        remember_me,
+                    } => {
                         let client = Arc::clone(CLIENT.get().expect("Client not found"));
-                        messages::login(login, password, client, handler).await;
+                        handle_error!(
+                            error_handler,
+                            messages::login(login, password, remember_me, client, handler).await
+                        );
                     }
                     RuntimeMessage::Play { profile } => {
                         let client = Arc::clone(CLIENT.get().expect("Client not found"));
-                        messages::play(profile, client, handler).await;
+                        handle_error!(
+                            error_handler,
+                            messages::start_client(handler, client, profile).await
+                        )
                     }
                     RuntimeMessage::Ready => {
-                        messages::ready(handler).await;
+                        handle_error!(error_handler, messages::ready(handler).await)
+                    }
+                    RuntimeMessage::SelectGameDir => {
+                        handle_error!(error_handler, messages::select_game_dir(handler).await)
+                    }
+                    RuntimeMessage::SaveSettings(settings) => {
+                        handle_error!(
+                            error_handler,
+                            messages::save_settings(settings, handler).await
+                        )
+                    }
+                    RuntimeMessage::Logout => {
+                        let client = Arc::clone(CLIENT.get().expect("Client not found"));
+                        handle_error!(error_handler, messages::logout(client).await)
                     }
                 };
             }

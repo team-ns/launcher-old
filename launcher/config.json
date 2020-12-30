@@ -1,8 +1,6 @@
 {
   "gameDir": "%homeDir%/.launcher",
-  "saveData": false,
-  "savedPassword": "",
-  "lastName": "",
+  "ram": 1024,
   "websocket": "",
   "fileServer": ""
 }

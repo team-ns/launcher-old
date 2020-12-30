@@ -26,6 +26,8 @@ notify = "5.0.0-pre.2"
 once_cell = "1.5"
 uuid = "0.8"
 log = "0.4"
+bincode = "1.3"
+nfd2 = "0.2"
 
 [dependencies.web-view]
 version = "0.6.2"
