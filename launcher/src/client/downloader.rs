@@ -4,6 +4,7 @@ use hyper::body::HttpBody;
 use hyper::{Body, Client, Request, Uri};
 use hyper_tls::HttpsConnector;
 
+use futures::Future;
 use launcher_api::validation::RemoteFile;
 use std::fs;
 use std::io::SeekFrom;
@@ -12,34 +13,29 @@ use tokio::fs::{File, OpenOptions};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedSender;
-use tokio::task::JoinHandle;
+use tokio::task::{JoinError};
 use web_view::Handle;
 
 const SMALL_SIZE: u64 = 1048576;
 const CHUNK_SIZE: u64 = 512000;
 
-pub async fn download(
-    files: Vec<RemoteFile>,
-    file_server: String,
-    handler: Handle<()>,
-) -> Result<()> {
+pub async fn download(files: Vec<(String, RemoteFile)>, handler: Handle<()>) -> Result<()> {
     let (progress_sender, mut receiver) = mpsc::unbounded_channel::<u64>();
-    let total_size = files.iter().map(|file| file.size).sum::<u64>();
+    let total_size = files.iter().map(|file| file.1.size).sum::<u64>();
 
-    let (concurrent, single): (Vec<RemoteFile>, Vec<RemoteFile>) =
-        files.into_iter().partition(|file| file.size <= SMALL_SIZE);
+    let (concurrent, single): (Vec<(String, RemoteFile)>, Vec<(String, RemoteFile)>) = files
+        .into_iter()
+        .partition(|file| file.1.size <= SMALL_SIZE);
 
-    let tasks = concurrent
+    let mut tasks = concurrent
         .into_iter()
         .map(|file| {
-            let file_server = file_server.clone();
             let progress_sender = progress_sender.clone();
-            tokio::spawn(async move {
-                let uri = format!("{}/{}", file_server, file.name).parse()?;
-                single_thread_download(file, uri, progress_sender).await
-            })
+            tokio::spawn(
+                async move { single_thread_download(file.1, file.0, progress_sender).await },
+            )
         })
-        .collect::<Vec<_>>();
+        .peekable();
 
     tokio::spawn(async move {
         let mut receive_size = 0;
@@ -83,10 +79,13 @@ pub async fn download(
             }
         }
     });
-    join_tasks(tasks).await?;
+
+    while tasks.peek().is_some() {
+        join_tasks(tasks.by_ref().take(100)).await?;
+    }
+
     for file in single {
-        let uri = format!("{}/{}", file_server, file.name).parse()?;
-        concurrent_download(file, uri, progress_sender.clone()).await?;
+        concurrent_download(file.1, file.0, progress_sender.clone()).await?;
     }
     Ok(())
 }
@@ -108,12 +107,13 @@ fn get_chunks(file_size: u64) -> Vec<(u64, u64)> {
 
 pub async fn concurrent_download(
     remote_file: RemoteFile,
-    uri: Uri,
+    path: String,
     progress_sender: UnboundedSender<u64>,
 ) -> Result<()> {
     let (sender, mut receiver) = mpsc::unbounded_channel();
     let total_size = remote_file.size.clone();
-    let mut file = create_file(get_path(&remote_file.name).as_ref()).await?;
+    let mut file = create_file(Path::new(&path)).await?;
+    let uri: Uri = remote_file.uri.parse()?;
     let mut tasks = get_chunks(remote_file.size - 1)
         .into_iter()
         .map(|chunk| {
@@ -166,13 +166,13 @@ pub async fn concurrent_download(
 
 async fn single_thread_download(
     remote_file: RemoteFile,
-    uri: Uri,
+    path: String,
     progress_sender: UnboundedSender<u64>,
 ) -> Result<()> {
     tokio::spawn(async move {
-        let mut file = create_file(get_path(&remote_file.name).as_ref()).await?;
+        let mut file = create_file(Path::new(&path)).await?;
         let client = Client::builder().build::<_, hyper::Body>(HttpsConnector::new());
-        let mut resp = client.get(uri).await?;
+        let mut resp = client.get(remote_file.uri.parse()?).await?;
         if resp.status().is_success() {
             while let Some(chunk) = resp.data().await {
                 let bytes = &chunk?;
@@ -191,7 +191,11 @@ async fn single_thread_download(
     .with_context(|| "Async task error!")?
 }
 
-async fn join_tasks(tasks: Vec<JoinHandle<Result<()>>>) -> Result<()> {
+async fn join_tasks<I>(tasks: I) -> Result<()>
+where
+    I: IntoIterator,
+    I::Item: Future<Output = Result<Result<()>, JoinError>>,
+{
     join_all(tasks)
         .await
         .into_iter()
@@ -209,14 +213,4 @@ async fn create_file(path: &Path) -> Result<File, Error> {
         .open(path)
         .await?;
     Ok(file)
-}
-
-pub fn get_path(path: &str) -> String {
-    if path.starts_with("assets") || path.starts_with("jre") {
-        let start = path.find("/").unwrap() + 1;
-        let end = &path[start..].find("/").unwrap() + 1;
-        [&path[0..start], &path[start + end..]].join("")
-    } else {
-        path.to_string()
-    }
 }
