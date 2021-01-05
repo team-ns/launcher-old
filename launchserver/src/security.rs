@@ -2,9 +2,11 @@ use anyhow::{Context, Result};
 use byteorder::{LittleEndian, ReadBytesExt};
 use ecies_ed25519::SecretKey;
 use launcher_api::profile::Profile;
-use launcher_api::validation::{HashedDirectory, HashedFile, OsType};
+use launcher_api::validation::{OsType, RemoteDirectory, RemoteFile};
 use log::{error, info};
+use path_slash::{PathBufExt, PathExt};
 use rand::rngs::OsRng;
+use reqwest::Url;
 use std::collections::hash_map::Values;
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -22,11 +24,11 @@ pub struct NativeVersion {
 
 pub struct SecurityManager {
     pub secret_key: SecretKey,
-    pub profiles: Option<HashMap<String, HashedDirectory>>,
-    pub libraries: Option<HashMap<String, HashedDirectory>>,
-    pub assets: Option<HashMap<String, HashedDirectory>>,
-    pub natives: Option<HashMap<NativeVersion, HashedDirectory>>,
-    pub jres: Option<HashMap<OsType, HashedDirectory>>,
+    pub profiles: Option<HashMap<String, RemoteDirectory>>,
+    pub libraries: Option<HashMap<String, RemoteDirectory>>,
+    pub assets: Option<HashMap<String, RemoteDirectory>>,
+    pub natives: Option<HashMap<NativeVersion, RemoteDirectory>>,
+    pub jres: Option<HashMap<OsType, RemoteDirectory>>,
 }
 
 impl Default for SecurityManager {
@@ -68,6 +70,24 @@ macro_rules! get_resource {
     };
 }
 
+pub fn create_remote_file<P: AsRef<Path>>(path: P, file_server: String) -> Result<RemoteFile> {
+    let mut buffer = Vec::new();
+    File::open(&path)?.read_to_end(&mut buffer)?;
+    Ok(RemoteFile {
+        uri: Url::parse(&format!(
+            "{}/{}",
+            file_server,
+            path.as_ref()
+                .strip_prefix("static/")
+                .expect("Failed to strip prefix while rehash file!")
+                .to_slash_lossy()
+        ))?
+        .into_string(),
+        size: buffer.len() as u64,
+        checksum: t1ha::t1ha2_atonce128(buffer.as_slice(), 1),
+    })
+}
+
 impl SecurityManager {
     pub fn decrypt(&self, text: &str) -> Result<String, String> {
         let text = base64::decode(text).map_err(|e| format!("Can't decode base64: {:?}!", e))?;
@@ -92,35 +112,49 @@ impl SecurityManager {
         Ok(())
     }
 
-    pub fn rehash(&mut self, profiles: Values<String, Profile>, args: &[&str]) {
+    pub fn rehash(
+        &mut self,
+        profiles: Values<String, Profile>,
+        args: &[&str],
+        file_server: String,
+    ) {
         get_resource!(
             args,
             self.profiles,
-            SecurityManager::hash_profiles(profiles.clone())
+            SecurityManager::hash_profiles(profiles.clone(), file_server.clone())
         );
         get_resource!(
             args,
             self.libraries,
-            SecurityManager::hash_libraries(profiles)
+            SecurityManager::hash_libraries(profiles, file_server.clone())
         );
-        get_resource!(args, self.assets, SecurityManager::hash_assets());
-        get_resource!(args, self.natives, SecurityManager::hash_natives());
-        get_resource!(args, self.jres, SecurityManager::hash_jres());
+        get_resource!(
+            args,
+            self.assets,
+            SecurityManager::hash_assets(file_server.clone())
+        );
+        get_resource!(
+            args,
+            self.natives,
+            SecurityManager::hash_natives(file_server.clone())
+        );
+        get_resource!(args, self.jres, SecurityManager::hash_jres(file_server));
         info!("Rehash was successfully finished!");
     }
 
     fn hash_profiles(
         profiles: Values<String, Profile>,
-    ) -> Result<HashMap<String, HashedDirectory>> {
+        file_server: String,
+    ) -> Result<HashMap<String, RemoteDirectory>> {
         let mut hashed_profiles = HashMap::new();
 
         for profile in profiles {
-            let mut hashed_profile = HashedDirectory::new();
+            let mut hashed_profile = RemoteDirectory::new();
             let black_list = vec!["profile.json", "description.txt"];
 
             let file_iter = get_files_from_dir(format!("static/profiles/{}", profile.name))
                 .filter(|e| !black_list.contains(&e.file_name().to_str().unwrap_or("")));
-            fill_map(file_iter, &mut hashed_profile)?;
+            fill_map(file_iter, &mut hashed_profile, file_server.clone())?;
 
             hashed_profiles.insert(profile.name.clone(), hashed_profile);
         }
@@ -129,20 +163,21 @@ impl SecurityManager {
 
     fn hash_libraries(
         profiles: Values<String, Profile>,
-    ) -> Result<HashMap<String, HashedDirectory>> {
+        file_server: String,
+    ) -> Result<HashMap<String, RemoteDirectory>> {
         let mut libs = HashMap::new();
-        for file in get_files_from_dir("static/libs") {
+        for file in get_files_from_dir("static/libraries") {
             libs.insert(
                 file.path().strip_prefix("static/")?.to_owned(),
-                HashedFile::new(file.path())?,
+                create_remote_file(file.path(), file_server.clone())?,
             );
         }
         let mut hashed_libs = HashMap::new();
 
         for profile in profiles {
-            let mut hashed_profile_libs = HashedDirectory::new();
+            let mut hashed_profile_libs = RemoteDirectory::new();
             for lib in &profile.libraries {
-                let lib = PathBuf::from(format!("libs/{}", lib));
+                let lib = PathBuf::from(format!("libraries/{}", lib));
                 match libs.get(&lib) {
                     Some(file) => {
                         hashed_profile_libs
@@ -161,26 +196,29 @@ impl SecurityManager {
         Ok(hashed_libs)
     }
 
-    fn hash_assets() -> Result<HashMap<String, HashedDirectory>> {
+    fn hash_assets(file_server: String) -> Result<HashMap<String, RemoteDirectory>> {
         let mut hashed_assets = HashMap::new();
 
         for version in get_first_level_dirs("static/assets") {
             let path = version.path();
-            hashed_assets.insert(strip(path, "static/assets/")?, create_hashed_dir(path)?);
+            hashed_assets.insert(
+                strip(path, "static/assets/")?,
+                create_hashed_dir(path, file_server.clone())?,
+            );
         }
         Ok(hashed_assets)
     }
 
-    fn hash_natives() -> Result<HashMap<NativeVersion, HashedDirectory>> {
-        let mut hashed_natives: HashMap<NativeVersion, HashedDirectory> = HashMap::new();
+    fn hash_natives(file_server: String) -> Result<HashMap<NativeVersion, RemoteDirectory>> {
+        let mut hashed_natives: HashMap<NativeVersion, RemoteDirectory> = HashMap::new();
 
         for version in get_first_level_dirs("static/natives") {
-            let mut hashed_native: HashMap<OsType, HashedDirectory> = [
-                (OsType::LinuxX64, HashedDirectory::new()),
-                (OsType::LinuxX32, HashedDirectory::new()),
-                (OsType::MacOSX64, HashedDirectory::new()),
-                (OsType::WindowsX64, HashedDirectory::new()),
-                (OsType::WindowsX32, HashedDirectory::new()),
+            let mut hashed_native: HashMap<OsType, RemoteDirectory> = [
+                (OsType::LinuxX64, RemoteDirectory::new()),
+                (OsType::LinuxX32, RemoteDirectory::new()),
+                (OsType::MacOSX64, RemoteDirectory::new()),
+                (OsType::WindowsX64, RemoteDirectory::new()),
+                (OsType::WindowsX32, RemoteDirectory::new()),
             ]
             .iter()
             .cloned()
@@ -223,10 +261,10 @@ impl SecurityManager {
                     }
                     match os_type {
                         Some(os_type) => {
-                            hashed_native
-                                .get_mut(&os_type)
-                                .unwrap()
-                                .insert(strip(path, "static/")?, HashedFile::new(path)?);
+                            hashed_native.get_mut(&os_type).unwrap().insert(
+                                strip(path, "static/")?,
+                                create_remote_file(path, file_server.clone())?,
+                            );
                         }
                         None => error!("Unknown file archetype: {:?}!", path),
                     }
@@ -248,7 +286,7 @@ impl SecurityManager {
         Ok(hashed_natives)
     }
 
-    fn hash_jres() -> Result<HashMap<OsType, HashedDirectory>> {
+    fn hash_jres(file_server: String) -> Result<HashMap<OsType, RemoteDirectory>> {
         let mut hashed_jres = HashMap::new();
 
         let jres = vec![
@@ -260,27 +298,49 @@ impl SecurityManager {
         ];
 
         for jre in jres {
-            hashed_jres.insert(jre.0, create_hashed_dir(format!("static/jre/{}", jre.1))?);
+            hashed_jres.insert(
+                jre.0,
+                create_hashed_dir(format!("static/jre/{}", jre.1), file_server.clone())?,
+            );
         }
         Ok(hashed_jres)
     }
 }
 
+fn strip_folder(path: &Path, save_number: usize, skip_number: usize) -> String {
+    path.iter()
+        .take(save_number)
+        .chain(path.iter().skip(save_number + skip_number))
+        .collect::<PathBuf>()
+        .to_slash_lossy()
+}
+
 fn fill_map(
     iter: impl Iterator<Item = DirEntry>,
-    map: &mut HashMap<String, HashedFile>,
+    map: &mut HashMap<String, RemoteFile>,
+    file_server: String,
 ) -> Result<()> {
     for file in iter {
         let path = file.path();
-        map.insert(strip(path, "static/")?, HashedFile::new(path)?);
+        let strip_path = if path.starts_with("static/jre") {
+            strip_folder(
+                path.strip_prefix("static/")
+                    .expect("Failed to strip prefix!"),
+                1,
+                1,
+            )
+        } else {
+            strip(path, "static/")?
+        };
+        map.insert(strip_path, create_remote_file(path, file_server.clone())?);
     }
     Ok(())
 }
 
-fn create_hashed_dir<P: AsRef<Path>>(path: P) -> Result<HashedDirectory> {
-    let mut directory = HashedDirectory::new();
+fn create_hashed_dir<P: AsRef<Path>>(path: P, file_server: String) -> Result<RemoteDirectory> {
+    let mut directory = RemoteDirectory::new();
     let iter = get_files_from_dir(path);
-    fill_map(iter, &mut directory)?;
+    fill_map(iter, &mut directory, file_server)?;
     Ok(directory)
 }
 

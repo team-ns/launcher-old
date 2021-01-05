@@ -24,6 +24,7 @@ t1ha = "0.1.0"
 byteorder = "1.3"
 anyhow = "1.0"
 log4rs = "0.13"
+path-slash = "0.1.1"
 
 
 [dependencies.launcher_api]

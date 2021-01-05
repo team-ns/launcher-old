@@ -11,10 +11,13 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 
-use crate::config::{Settings, CONFIG, SETTINGS};
+use crate::config::{Settings, SETTINGS};
 
 use nfd2::Response;
 use path_slash::PathBufExt;
+
+use futures::TryFutureExt;
+use jni::JavaVM;
 
 use web_view::Handle;
 
@@ -143,21 +146,35 @@ pub async fn start_client(
     let resources = client.get_resources(&profile).await?;
     let settings = SETTINGS.get().expect("Can't get settings").lock().await;
     let game_dir = settings.game_dir.clone();
-    validation::validate_profile(
-        game_dir.clone(),
-        profile.clone(),
-        resources,
-        CONFIG.file_server.clone(),
-        handler.clone(),
-    )
-    .await?;
     let profile = client.get_profile(&profile).await?.profile;
+    let watcher = validation::validate_profile(&profile, resources, handler.clone()).await?;
     let auth_info = client.auth_info.clone();
     drop(client);
+    let jvm = game::create_jvm(profile.clone(), &game_dir)?;
+    //Safe JVM struct clone for get non-send JNIEnv in task
+    let jvm_copy = unsafe {
+        JavaVM::from_raw(jvm.get_java_vm_pointer()).expect("Failed to get copy of JavaVM")
+    };
+    let watcher_handle = tokio::task::spawn_blocking(move || unsafe {
+        loop {
+            match watcher.receiver.recv() {
+                Ok(message) => jvm_copy.attach_current_thread_as_daemon()
+                    .expect("Failed to get JNIEnv!")
+                    .throw(format!(
+                        "Forbidden modification: {:?}",
+                        message.map(|e| e.paths)
+                    ))
+                    .expect("Failed to close game!"),
+                Err(_) => jvm_copy
+                    .attach_current_thread_as_daemon()
+                    .expect("Failed to get JNIEnv!")
+                    .throw("WatcherService had been closed before game end!")
+                    .expect("Failed to close game!"),
+            }
+        }
+    });
     let game_handle = tokio::task::spawn_blocking(move || {
-        let jvm = game::create_jvm(profile.clone(), &game_dir)?;
         if let Some(info) = auth_info {
-            //jvm watcher start
             handler.dispatch(|w| {
                 w.exit();
                 Ok(())
@@ -168,7 +185,7 @@ pub async fn start_client(
         }
         Ok(())
     });
-    let join_handle = tokio::spawn(async {
+    let _join_handle = tokio::spawn(async {
         loop {
             let (token, profile, server) = CHANNEL_GET.1.lock().unwrap().recv().unwrap();
             let mut client = CLIENT.get().unwrap().lock().await;
@@ -178,7 +195,8 @@ pub async fn start_client(
             };
         }
     });
-    tokio::try_join!(game_handle, join_handle);
+    watcher_handle.await?;
+    game_handle.await??;
     Ok(())
 }
 

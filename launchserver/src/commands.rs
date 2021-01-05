@@ -139,7 +139,11 @@ fn register_command(helper: &mut CommandHelper) {
 }
 
 pub fn rehash(server: &mut LaunchServer, args: &[&str]) {
-    server.security.rehash(server.profiles.values(), args);
+    server.security.rehash(
+        server.profiles.values(),
+        args,
+        server.config.file_server.clone(),
+    );
 }
 
 pub fn sync(server: &mut LaunchServer, _args: &[&str]) {

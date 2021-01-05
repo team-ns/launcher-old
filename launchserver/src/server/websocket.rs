@@ -7,7 +7,7 @@ use launcher_api::message::{
     ProfileResourcesMessage, ProfileResourcesResponse, ProfileResponse, ProfilesInfoMessage,
     ProfilesInfoResponse, ServerMessage,
 };
-use launcher_api::validation::HashedDirectory;
+use launcher_api::validation::RemoteDirectory;
 use log::debug;
 use log::error;
 use rand::Rng;
@@ -99,9 +99,9 @@ pub trait Handle {
 }
 
 fn get_resource<T>(
-    resource: &Option<HashMap<T, HashedDirectory>>,
+    resource: &Option<HashMap<T, RemoteDirectory>>,
     key: &T,
-) -> Result<HashedDirectory, String>
+) -> Result<RemoteDirectory, String>
 where
     T: Eq + Hash,
 {

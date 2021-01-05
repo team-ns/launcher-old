@@ -33,7 +33,7 @@ impl LaunchServer {
         info!("Launch server starting...");
         let (profiles, profiles_info) = profile::get_profiles();
         let mut security = SecurityManager::default();
-        security.rehash(profiles.values(), &[]);
+        security.rehash(profiles.values(), &[], config.file_server.clone());
 
         LaunchServer {
             config,

@@ -41,7 +41,7 @@ pub async fn start(data: Arc<RwLock<LaunchServer>>) -> std::io::Result<()> {
         .and_then(has_join);
     let routes = dir.or(ws).or(join).or(has_joined);
     warp::serve(routes)
-        .run(SocketAddr::from_str(&config.address).expect("Can't parse server address"))
+        .run(SocketAddr::from_str(&config.bind_address).expect("Can't parse server address"))
         .await;
     Ok(())
 }

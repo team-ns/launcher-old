@@ -5,7 +5,7 @@ use jni::{InitArgsBuilder, JNIVersion, JavaVM, NativeMethod};
 use launcher_api::profile::Profile;
 use profile::ClientProfile;
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::client::AuthInfo;
 use crate::game::auth::Java_com_mojang_authlib_yggdrasil_launcherJoinRequest;
@@ -49,7 +49,9 @@ pub fn create_jvm(profile: Profile, dir: &str) -> Result<JavaVM> {
 
     match args {
         Ok(args) => {
-            let lib: Container<JvmLibrary> = unsafe { Container::load(JVM_LIB_PATH)? };
+            env::set_current_dir(profile.get_client_dir(dir));
+            let lib: Container<JvmLibrary> =
+                unsafe { Container::load(Path::new(dir).join("jre").join(JVM_LIB_PATH))? };
             Ok(JavaVM::new(args, lib)?)
         }
         Err(_) => Err(anyhow::anyhow!("Failed to create java args!")),

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::profile::{Profile, ProfileInfo};
-use crate::validation::{HashedDirectory, OsType};
+use crate::validation::{OsType, RemoteDirectory};
 
 #[derive(Deserialize, Serialize)]
 pub enum ClientMessage {
@@ -62,11 +62,11 @@ pub struct ProfilesInfoResponse {
 
 #[derive(Deserialize, Serialize)]
 pub struct ProfileResourcesResponse {
-    pub profile: HashedDirectory,
-    pub libraries: HashedDirectory,
-    pub assets: HashedDirectory,
-    pub natives: HashedDirectory,
-    pub jre: HashedDirectory,
+    pub profile: RemoteDirectory,
+    pub libraries: RemoteDirectory,
+    pub assets: RemoteDirectory,
+    pub natives: RemoteDirectory,
+    pub jre: RemoteDirectory,
 }
 
 #[derive(Deserialize, Serialize)]

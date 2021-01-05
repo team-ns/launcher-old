@@ -8,6 +8,8 @@ use std::sync::Arc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::Mutex;
 
+use crate::config::CONFIG;
+use std::{env, fs};
 use web_view::{Content, Handle, WVResult, WebView};
 
 mod messages;
@@ -34,6 +36,8 @@ pub async fn start() {
     let message_handle = tokio::task::spawn(async move {
         message_loop(rx).await;
     });
+    fs::create_dir_all(&CONFIG.game_dir);
+    env::set_current_dir(&CONFIG.game_dir);
     let ui_handle = tokio::task::spawn_blocking(move || {
         let webview = web_view::builder()
             .title("NSLauncher")

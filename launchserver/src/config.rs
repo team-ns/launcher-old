@@ -12,11 +12,15 @@ pub(crate) mod auth;
 mod texture;
 
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Config {
-    pub address: String,
+    pub bind_address: String,
     pub auth: AuthProvider,
     pub texture: TextureProvider,
     pub workers: usize,
+    pub file_server: String,
+    pub websocket_url: String,
+    pub project_name: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -47,12 +51,15 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             workers: 3,
-            address: "127.0.0.1:8080".to_string(),
+            file_server: "http://127.0.0.1:8080/files".to_string(),
+            bind_address: "127.0.0.1:8080".to_string(),
             auth: Empty,
             texture: TextureProvider {
                 skin_url: "http://example.com/skin/{username}.png".to_string(),
                 cape_url: "http://example.com/cape/{username}.png".to_string(),
             },
+            websocket_url: "ws://127.0.0.1:8080".to_string(),
+            project_name: "NSL".to_string(),
         }
     }
 }

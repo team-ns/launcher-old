@@ -1,34 +1,26 @@
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::Read;
-use std::path::Path;
 
-#[derive(Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct HashedFile {
     pub size: u64,
     pub checksum: u128,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub struct RemoteFile {
-    pub name: String,
+    pub uri: String,
     pub size: u64,
+    pub checksum: u128,
 }
 
-impl HashedFile {
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let mut buffer = Vec::new();
-        File::open(path)?.read_to_end(&mut buffer)?;
-        Ok(HashedFile {
-            size: buffer.len() as u64,
-            checksum: t1ha::t1ha2_atonce128(buffer.as_slice(), 1),
-        })
+impl PartialEq<RemoteFile> for HashedFile {
+    fn eq(&self, other: &RemoteFile) -> bool {
+        self.size == other.size && self.checksum == other.checksum
     }
 }
 
-pub type HashedDirectory = HashMap<String, HashedFile>;
+pub type RemoteDirectory = HashMap<String, RemoteFile>;
 
 #[derive(Deserialize, Serialize, PartialEq, Eq, Hash, Clone)]
 pub enum OsType {
