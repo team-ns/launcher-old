@@ -21,7 +21,6 @@ pub trait ClientProfile {
 
 impl ClientProfile for Profile {
     fn new(path: &str) -> Profile {
-        println!("{}", path);
         serde_json::from_reader(File::open(path).unwrap()).unwrap()
     }
 
@@ -37,7 +36,6 @@ impl ClientProfile for Profile {
             .map(|s| self.get_client_dir(dir).join(&s).to_slash_lossy())
             .collect();
         path += &class_path.join(CLASS_PATH_SEPARATOR);
-        println!("{}", path);
         path
     }
 
@@ -90,6 +88,6 @@ impl ClientProfile for Profile {
     }
 
     fn get_client_dir(&self, dir: &str) -> PathBuf {
-        Path::new(dir).join(&self.name)
+        Path::new(dir).join("profiles").join(&self.name)
     }
 }
