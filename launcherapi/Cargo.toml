@@ -8,8 +8,6 @@ edition = "2018"
 
 [dependencies]
 serde_json = "1.0"
-t1ha = "0.1.0"
-anyhow = "1.0.31"
 
 [dependencies.serde]
 version = "1.0"
