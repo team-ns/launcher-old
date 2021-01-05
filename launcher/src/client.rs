@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use launcher_api::config::Configurable;
+
 
 use launcher_api::message::{
     AuthMessage, AuthResponse, ClientMessage, JoinServerMessage, ProfileMessage, ProfileResponse,
@@ -9,7 +9,7 @@ use launcher_api::message::{Error, ProfileResourcesMessage, ProfileResourcesResp
 
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use crate::config::{Config, CONFIG};
+use crate::config::{CONFIG};
 
 use crate::security;
 use crate::security::validation::get_os_type;
@@ -127,7 +127,9 @@ impl Client {
             .await
             .expect("Can't send message to server");
         match self.recv.recv().await {
-            Some(message) => serde_json::from_str(&message).unwrap(),
+            Some(message) => {
+                serde_json::from_str(&message).unwrap()
+            }
             None => ServerMessage::Error(Error {
                 msg: "Server Disconnected".to_string(),
             }),
