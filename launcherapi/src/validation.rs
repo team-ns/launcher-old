@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct HashedFile {
@@ -20,7 +21,7 @@ impl PartialEq<RemoteFile> for HashedFile {
     }
 }
 
-pub type RemoteDirectory = HashMap<String, RemoteFile>;
+pub type RemoteDirectory = HashMap<PathBuf, RemoteFile>;
 
 #[derive(Deserialize, Serialize, PartialEq, Eq, Hash, Clone)]
 pub enum OsType {
