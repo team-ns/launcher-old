@@ -33,9 +33,7 @@ sysinfo = "0.15"
 obfstr = "0.2"
 
 [dependencies.web-view]
-version = "0.6.2"
-git = "https://gitlab.com/nsl_team/web-view"
-branch = "frameless"
+git = "https://github.com/team-ns/web-view"
 
 [dependencies.tokio]
 version = "0.2"
