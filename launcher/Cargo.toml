@@ -50,7 +50,7 @@ branch = "dynamic"
 version = "0.3"
 features = ["winnt"]
 
-[target.'cfg(linux)'.dependencies]
+[target.'cfg(target_os = "linux")'.dependencies]
 uname = "0.1"
 
 [target.'cfg(windows)'.build-dependencies]
