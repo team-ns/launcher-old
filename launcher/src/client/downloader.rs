@@ -13,7 +13,7 @@ use tokio::fs::{File, OpenOptions};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedSender;
-use tokio::task::{JoinError};
+use tokio::task::JoinError;
 use web_view::Handle;
 
 const SMALL_SIZE: u64 = 1048576;
@@ -49,7 +49,7 @@ pub async fn download(files: Vec<(String, RemoteFile)>, handler: Handle<()>) -> 
         loop {
             if total_size == receive_size {
                 handler.dispatch(move |w| {
-                    w.eval("app.backend.download.wait()");
+                    w.eval("app.backend.download.wait()")?;
                     Ok(())
                 });
                 return;
@@ -65,13 +65,13 @@ pub async fn download(files: Vec<(String, RemoteFile)>, handler: Handle<()>) -> 
                         w.eval(&format!(
                             "app.backend.download.updateSize('{}')",
                             receive_size
-                        ));
+                        ))?;
                         Ok(())
                     });
                 }
                 Err(error) => {
                     handler.dispatch(move |w| {
-                        w.eval(&format!("app.backend.error('{}')", error));
+                        w.eval(&format!("app.backend.error('{}')", error))?;
                         Ok(())
                     });
                     return;
@@ -206,6 +206,9 @@ where
 
 async fn create_file(path: &Path) -> Result<File, Error> {
     fs::create_dir_all(path.parent().unwrap())?;
+    if path.is_file() {
+        fs::remove_file(path)?;
+    }
     let file = OpenOptions::new()
         .write(true)
         .create(true)
