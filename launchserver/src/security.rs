@@ -89,11 +89,13 @@ pub fn create_remote_file<P: AsRef<Path>>(path: P, file_server: String) -> Resul
 }
 
 impl SecurityManager {
-    pub fn decrypt(&self, text: &str) -> Result<String, String> {
-        let text = base64::decode(text).map_err(|e| format!("Can't decode base64: {:?}!", e))?;
+    pub fn decrypt(&self, text: &str) -> Result<String> {
+        let text =
+            base64::decode(text).map_err(|e| anyhow::anyhow!("Can't decode base64: {:?}!", e))?;
         let pwd = ecies_ed25519::decrypt(&self.secret_key, &text)
-            .map_err(|e| format!("Invalid encrypted password: {:?}!", e))?;
-        Ok(String::from_utf8(pwd).map_err(|_| "Password contains invalid symbols!")?)
+            .map_err(|e| anyhow::anyhow!("Invalid encrypted password: {:?}!", e))?;
+        Ok(String::from_utf8(pwd)
+            .map_err(|_| anyhow::anyhow!("Password contains invalid symbols!"))?)
     }
 
     fn create_keys(public_key: &Path, secret_key: &Path) -> Result<()> {
@@ -180,8 +182,7 @@ impl SecurityManager {
                 let lib = PathBuf::from(format!("libraries/{}", lib));
                 match libs.get(&lib) {
                     Some(file) => {
-                        hashed_profile_libs
-                            .insert(lib.to_string_lossy().as_ref().to_string(), file.clone());
+                        hashed_profile_libs.insert(lib, file.clone());
                     }
                     None => {
                         error!(
@@ -262,7 +263,7 @@ impl SecurityManager {
                     match os_type {
                         Some(os_type) => {
                             hashed_native.get_mut(&os_type).unwrap().insert(
-                                strip(path, "static/")?,
+                                PathBuf::from(strip(path, "static/")?),
                                 create_remote_file(path, file_server.clone())?,
                             );
                         }
@@ -317,7 +318,7 @@ fn strip_folder(path: &Path, save_number: usize, skip_number: usize) -> String {
 
 fn fill_map(
     iter: impl Iterator<Item = DirEntry>,
-    map: &mut HashMap<String, RemoteFile>,
+    map: &mut HashMap<PathBuf, RemoteFile>,
     file_server: String,
 ) -> Result<()> {
     for file in iter {
@@ -332,7 +333,10 @@ fn fill_map(
         } else {
             strip(path, "static/")?
         };
-        map.insert(strip_path, create_remote_file(path, file_server.clone())?);
+        map.insert(
+            PathBuf::from(strip_path),
+            create_remote_file(path, file_server.clone())?,
+        );
     }
     Ok(())
 }
