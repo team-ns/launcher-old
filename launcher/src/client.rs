@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
 
-
 use launcher_api::message::{
     AuthMessage, AuthResponse, ClientMessage, JoinServerMessage, ProfileMessage, ProfileResponse,
     ProfilesInfoMessage, ProfilesInfoResponse, ServerMessage,
@@ -9,7 +8,7 @@ use launcher_api::message::{Error, ProfileResourcesMessage, ProfileResourcesResp
 
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use crate::config::{CONFIG};
+use crate::config::CONFIG;
 
 use crate::security;
 use crate::security::validation::get_os_type;
@@ -51,13 +50,6 @@ impl Client {
             .map_err(|_e| anyhow!("Connection error"))?
             .into_text();
         Ok(ws.into_channel().await)
-    }
-
-    pub async fn reconnect(&mut self) -> Result<()> {
-        let (s, r) = Client::connect(&CONFIG.websocket).await?;
-        self.recv = r;
-        self.out = s;
-        Ok(())
     }
 
     pub async fn get_encrypted_password(&self, password: &str) -> String {
@@ -127,9 +119,7 @@ impl Client {
             .await
             .expect("Can't send message to server");
         match self.recv.recv().await {
-            Some(message) => {
-                serde_json::from_str(&message).unwrap()
-            }
+            Some(message) => serde_json::from_str(&message).unwrap(),
             None => ServerMessage::Error(Error {
                 msg: "Server Disconnected".to_string(),
             }),
