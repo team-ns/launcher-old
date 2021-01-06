@@ -240,9 +240,8 @@ pub async fn select_game_dir(handler: Handle<()>) -> Result<()> {
 pub async fn save_settings(settings: Settings, handler: Handle<()>) -> Result<()> {
     settings.save()?;
     update_settings(&settings, handler).await?;
-    SETTINGS
-        .set(Arc::new(Mutex::new(settings)))
-        .expect("Can't update settings");
+    let mut settings = SETTINGS.get().expect("Can't take settings").lock().await;
+    settings.update(&settings);
     Ok(())
 }
 

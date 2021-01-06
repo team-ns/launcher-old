@@ -55,6 +55,11 @@ impl Settings {
         file.write_all(&body)?;
         Ok(())
     }
+
+    pub fn update(&mut self, settings: &Self) -> Result<()> {
+        self.ram = settings.ram;
+        Ok(())
+    }
 }
 
 impl Default for Settings {
