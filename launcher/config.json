@@ -2,6 +2,5 @@
   "gameDir": "%homeDir%/.launcher",
   "ram": 1024,
   "websocket": "",
-  "fileServer": "",
   "projectName": ""
 }

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::{fs, path};
 use tokio::sync::Mutex;
 
-pub static CONFIG: Lazy<Config> = Lazy::new(|| Config::default());
+pub static CONFIG: Lazy<Config> = Lazy::new(Config::default);
 
 pub static SETTINGS: OnceCell<Arc<Mutex<Settings>>> = OnceCell::new();
 
@@ -18,7 +18,6 @@ pub struct Config {
     pub game_dir: String,
     pub websocket: String,
     pub ram: u64,
-    pub file_server: String,
     pub project_name: String,
 }
 
