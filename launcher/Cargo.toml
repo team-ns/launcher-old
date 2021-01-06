@@ -1,6 +1,6 @@
 [package]
 name = "nslauncher"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["Belz", "Jeb"]
 edition = "2018"
 build = "build.rs"
