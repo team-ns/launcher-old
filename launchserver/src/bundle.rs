@@ -29,8 +29,8 @@ fn unpack<T: RustEmbed>(folder: &str) -> Result<()> {
             if let Some(parent) = file_path.parent() {
                 create_dir_all(parent)?;
             }
-            let mut file =
-                File::create(file_path).expect(&format!("Can't create file {}", filename));
+            let mut file = File::create(file_path)
+                .unwrap_or_else(|_| panic!("Can't create file {}", filename));
             if let Some(bytes) = T::get(filename.as_ref()) {
                 file.write_all(&bytes)?;
             }

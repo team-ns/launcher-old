@@ -230,9 +230,8 @@ impl SecurityManager {
                 let path = file.path();
 
                 let extension = path.extension().and_then(OsStr::to_str);
-                if extension.is_some() {
+                if let Some(extension) = extension {
                     let mut os_type = None;
-                    let extension = extension.unwrap();
                     if extension.eq("dll") {
                         let mut file = File::open(path)?;
                         file.seek(SeekFrom::Start(0x3C))?;

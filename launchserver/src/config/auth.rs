@@ -106,10 +106,10 @@ impl AuthProvide for JsonAuthProvider {
                 if v.status().is_success() {
                     Ok(())
                 } else {
-                    return Err(anyhow::anyhow!("Bad request, status code: {}", v.status()));
+                    Err(anyhow::anyhow!("Bad request, status code: {}", v.status()))
                 }
             })
-            .unwrap_or(Err(anyhow::anyhow!("Can't connect".to_string())))
+            .unwrap_or_else(|_| Err(anyhow::anyhow!("Can't connect".to_string())))
     }
 
     async fn update_server_id(&self, uuid: &Uuid, server_id: &str) -> Result<()> {

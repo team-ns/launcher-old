@@ -67,12 +67,7 @@ impl ClientProfile for Profile {
         args.push(String::from("--gameDir"));
         args.push(self.get_client_dir(dir).to_string_lossy().to_string());
         args.push(String::from("--assetsDir"));
-        args.push(
-            Path::new(dir)
-                .join(&self.assets_dir)
-                .to_slash_lossy()
-                .to_string(),
-        );
+        args.push(Path::new(dir).join(&self.assets_dir).to_slash_lossy());
         args.push(String::from("--assetIndex"));
         args.push(self.assets.to_string());
         args.push(String::from("--uuid"));
@@ -92,11 +87,11 @@ impl ClientProfile for Profile {
                 JObject::from(env.new_string("").unwrap()),
             )
             .unwrap();
-        for i in 0..args.len() {
+        for (i, arg) in args.iter().enumerate() {
             env.set_object_array_element(
                 array,
                 i as i32,
-                JObject::from(env.new_string(&args[i]).unwrap()),
+                JObject::from(env.new_string(&arg).unwrap()),
             )
             .unwrap();
         }

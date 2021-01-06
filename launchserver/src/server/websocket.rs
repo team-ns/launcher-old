@@ -22,6 +22,7 @@ use crate::security::NativeVersion;
 use crate::LaunchServer;
 
 pub struct Client {
+    #[allow(unused)] // remove when ready ip limiter
     ip: String,
     access_token: Option<String>,
     username: Option<String>,

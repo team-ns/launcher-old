@@ -71,7 +71,7 @@ impl Client {
     pub async fn join(&mut self, token: &str, profile: &Uuid, server: &str) -> Result<()> {
         let message = ClientMessage::JoinServer(JoinServerMessage {
             access_token: String::from(token),
-            selected_profile: profile.clone(),
+            selected_profile: *profile,
             server_id: String::from(server),
         });
         match self.send_sync(message).await {

@@ -7,19 +7,21 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
-
-pub static CHANNEL_GET: Lazy<(
+pub type AuthGetChannel = Lazy<(
     Arc<Mutex<Sender<(String, Uuid, String)>>>,
     Arc<Mutex<Receiver<(String, Uuid, String)>>>,
-)> = Lazy::new(|| {
+)>;
+
+pub static CHANNEL_GET: AuthGetChannel = Lazy::new(|| {
     let (rx, tx) = std::sync::mpsc::channel();
     (Arc::new(Mutex::new(rx)), Arc::new(Mutex::new(tx)))
 });
-pub static CHANNEL_SEND: Lazy<(Arc<Mutex<Sender<String>>>, Arc<Mutex<Receiver<String>>>)> =
-    Lazy::new(|| {
-        let (rx, tx) = std::sync::mpsc::channel();
-        (Arc::new(Mutex::new(rx)), Arc::new(Mutex::new(tx)))
-    });
+
+pub type AuthSendChannel = Lazy<(Arc<Mutex<Sender<String>>>, Arc<Mutex<Receiver<String>>>)>;
+pub static CHANNEL_SEND: AuthSendChannel = Lazy::new(|| {
+    let (rx, tx) = std::sync::mpsc::channel();
+    (Arc::new(Mutex::new(rx)), Arc::new(Mutex::new(tx)))
+});
 
 #[no_mangle]
 #[allow(non_snake_case)]
@@ -35,7 +37,7 @@ pub(crate) extern "system" fn Java_com_mojang_authlib_yggdrasil_launcherJoinRequ
         }
         fn get_string(&self, result: Result<JObject, jni::errors::Error>) -> String {
             result
-                .and_then(|obj| Ok(JString::from(obj)))
+                .map(JString::from)
                 .and_then(|jstr| self.0.get_string(jstr))
                 .unwrap()
                 .into()
@@ -47,7 +49,7 @@ pub(crate) extern "system" fn Java_com_mojang_authlib_yggdrasil_launcherJoinRequ
             result
                 .and_then(|obj| {
                     self.0
-                        .call_method(obj, "toString", "()Ljava/lang/String;", &vec![])
+                        .call_method(obj, "toString", "()Ljava/lang/String;", &[])
                 })
                 .and_then(|v| v.l())
         }
@@ -64,7 +66,7 @@ pub(crate) extern "system" fn Java_com_mojang_authlib_yggdrasil_launcherJoinRequ
         .0
         .lock()
         .unwrap()
-        .send((String::from(token), profile.clone(), String::from(server)))
+        .send((token, profile, server))
         .expect("Can't send join info to client");
     let string = CHANNEL_SEND.1.lock().unwrap().recv().unwrap();
     if !string.is_empty() {

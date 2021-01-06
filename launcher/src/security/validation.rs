@@ -9,19 +9,11 @@ use path_slash::PathExt;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use tokio::stream::StreamExt;
 use web_view::Handle;
 
 pub enum ValidationStatus {
     Success,
     NeedUpdate(Vec<(String, RemoteFile)>, Vec<PathBuf>),
-}
-
-fn resource_exists(resource: &str) -> bool {
-    PathBuf::from(resource)
-        .read_dir()
-        .map(|mut dir| dir.next().is_some())
-        .unwrap_or(false)
 }
 
 macro_rules! extend {
@@ -34,35 +26,15 @@ macro_rules! extend {
     };
 }
 
-macro_rules! check_resources {
-    ($file_server:expr, $handler:expr, $($resources:expr),+) => {
-        let mut files = Vec::new();
-        exists!(files, $($resources),+);
-        downloader::download(files, $handler).await?;
-    };
-}
-
-macro_rules! exists {
-    ($files:expr, $resource:expr) => {
-        if !resource_exists(&stringify!($resource)[10..]) {
-            $files.extend($resource);
-        }
-    };
-    ($files:expr, $resource:expr, $($resources:expr),+) => {
-        exists!($files, $resource);
-        exists!($files, $($resources),+);
-    };
-}
-
 pub fn new_remote_directory(resources: ProfileResourcesResponse) -> RemoteDirectory {
     let mut files = RemoteDirectory::new();
     extend!(
         files,
-        resources.profile.clone(),
-        resources.libraries.clone(),
-        resources.assets.clone(),
-        resources.natives.clone(),
-        resources.jre.clone()
+        resources.profile,
+        resources.libraries,
+        resources.assets,
+        resources.natives,
+        resources.jre
     );
     files
 }
@@ -88,16 +60,15 @@ pub async fn validate_profile(
         w.eval("app.backend.download.wait()")?;
         Ok(())
     })?;
-    match validate(&files, verify, exclude)? {
-        ValidationStatus::NeedUpdate(files_to_update, file_to_remove) => {
-            debug!("Files to download: {:?}", files_to_update);
-            debug!("Files to remove: {:?}", file_to_remove);
-            downloader::download(files_to_update, handler).await?;
-            for path in file_to_remove {
-                tokio::fs::remove_file(path).await?
-            }
+    if let ValidationStatus::NeedUpdate(files_to_update, file_to_remove) =
+        validate(&files, verify, exclude)?
+    {
+        debug!("Files to download: {:?}", files_to_update);
+        debug!("Files to remove: {:?}", file_to_remove);
+        downloader::download(files_to_update, handler).await?;
+        for path in file_to_remove {
+            tokio::fs::remove_file(path).await?
         }
-        _ => {}
     }
     let watcher = WatcherService::new(profile).expect("Failed to create WatcherService");
     match validate(&files, verify, exclude)? {

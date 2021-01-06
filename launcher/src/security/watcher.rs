@@ -11,6 +11,7 @@ enum Watcher {
 }
 
 pub struct WatcherService {
+    #[allow(unused)]
     watcher: Watcher,
     pub sender: Sender<Result<Event, Error>>,
     pub receiver: Receiver<Result<Event, Error>>,
@@ -38,7 +39,7 @@ fn create_watcher<T: notify::Watcher>(
     sender: Sender<Result<Event, Error>>,
 ) -> Result<T> {
     let mut watcher = T::new_immediate(move |res| {
-        sender.send(res);
+        sender.send(res).expect("Can't send message");
     })?;
     for path in &profile.update_verify {
         watcher.watch(path, RecursiveMode::Recursive)?;

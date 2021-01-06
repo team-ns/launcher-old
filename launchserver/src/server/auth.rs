@@ -38,8 +38,7 @@ pub(crate) async fn has_join(
         )),
         Ok(e) => {
             if e.server_id.is_some() && e.server_id.clone().unwrap().eq(&request.server_id) {
-                let texture =
-                    base64::encode(&texture.get_textures_property(&e).to_string()).to_string();
+                let texture = base64::encode(&texture.get_textures_property(&e).to_string());
                 Ok(warp::reply::with_status(
                     warp::reply::json(&serde_json::json!({
                         "id":  e.uuid.to_simple().encode_lower(&mut Uuid::encode_buffer()),

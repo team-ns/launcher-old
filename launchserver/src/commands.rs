@@ -13,7 +13,7 @@ use tokio::sync::RwLock;
 use crate::server::profile;
 use crate::LaunchServer;
 
-type CmdFn = Box<dyn Fn(&mut LaunchServer, &[&str]) -> () + Send + Sync>;
+type CmdFn = Box<dyn Fn(&mut LaunchServer, &[&str]) + Send + Sync>;
 
 struct Command {
     name: String,
@@ -120,7 +120,7 @@ pub async fn start(server: Arc<RwLock<LaunchServer>>) {
                     rl.add_history_entry(line.as_str());
                     rl.helper_mut()
                         .unwrap()
-                        .eval(line.trim_end_matches("\n").to_string())
+                        .eval(line.trim_end_matches('\n').to_string())
                         .await;
                 }
                 Err(ReadlineError::Interrupted) => {

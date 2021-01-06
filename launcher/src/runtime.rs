@@ -9,7 +9,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::Mutex;
 
 use crate::config::CONFIG;
-use web_view::{Content, Handle, WVResult, WebView};
+use web_view::{Content, Error as WVError, Handle, WVResult, WebView};
 
 mod messages;
 
@@ -53,11 +53,11 @@ pub async fn start() {
             .expect("Can't create webview runtime");
         webview.run().expect("Can't run webview runtime");
     });
-    ui_handle.await;
+    ui_handle.await.expect("Can't execute ui loop");
     if PLAYING.get().is_none() {
         std::process::exit(0);
     }
-    message_handle.await;
+    message_handle.await.expect("Can't execute message loop");
 }
 
 fn invoke_handler(
@@ -69,7 +69,9 @@ fn invoke_handler(
     debug!("Argument from runtime: {}", arg);
     let message: RuntimeMessage =
         serde_json::from_str(arg).expect("Can't parse message from runtime");
-    sender.send((message, handler));
+    sender
+        .send((message, handler))
+        .map_err(|_| WVError::JsEvaluation)?;
     Ok(())
 }
 

@@ -57,7 +57,7 @@ pub async fn login_user(
     handler.dispatch(move |w| {
         w.eval(&format!(
             r#"app.backend.logined('{}')"#,
-            json.to_string().replace(r#"""#, r#"""#)
+            json.replace(r#"""#, r#"""#)
         ))?;
         Ok(())
     })?;
@@ -67,7 +67,9 @@ pub async fn login_user(
 pub async fn ready(handler: Handle<()>) -> Result<()> {
     match Client::new().await {
         Ok(c) => {
-            CLIENT.set(Arc::new(Mutex::new(c)));
+            CLIENT
+                .set(Arc::new(Mutex::new(c)))
+                .map_err(|_| anyhow::anyhow!("Can't update client"))?;
             let settings = match Settings::load() {
                 Ok(s) => s,
                 Err(_e) => {
@@ -77,7 +79,9 @@ pub async fn ready(handler: Handle<()>) -> Result<()> {
                 }
             };
             update_settings(&settings, handler.clone()).await?;
-            SETTINGS.set(Arc::new(Mutex::new(settings.clone())));
+            SETTINGS
+                .set(Arc::new(Mutex::new(settings.clone())))
+                .expect("Can't update settings");
             if settings.save_data {
                 let login = &settings.last_name.expect("Can't get login");
                 let password = &settings.saved_password.expect("Can't get saved password");
@@ -159,34 +163,26 @@ pub async fn start_client(
     drop(client);
     PLAYING.set(()).expect("Can't set playing status");
     let jvm = game::create_jvm(profile.clone(), &game_dir, ram)?;
-    let watcher_handle = tokio::task::spawn_blocking(move || {
-        loop {
+    let watcher_handle: tokio::task::JoinHandle<Result<()>> =
+        tokio::task::spawn_blocking(move || loop {
             let event = watcher.receiver.recv()??;
-            match event.kind {
-                EventKind::Modify(_) => {
-                    for path in event.paths {
-                        if path.is_file() {
-                            error!("Directory {:?}", remote_directory);
-                            if remote_directory.contains_key(&path) {
-                                let remote_file = &remote_directory[&path];
-                                let hashed_file = &validation::create_hashed_file(&path)?;
-                                if hashed_file != remote_file {
-                                    return Err(anyhow::anyhow!(
-                                        "Forbidden modification: {:?}",
-                                        path
-                                    ));
-                                }
-                            } else {
-                                return Err(anyhow::anyhow!("Unknown file: {:?}", path));
+            if let EventKind::Modify(_) = event.kind {
+                for path in event.paths {
+                    if path.is_file() {
+                        error!("Directory {:?}", remote_directory);
+                        if remote_directory.contains_key(&path) {
+                            let remote_file = &remote_directory[&path];
+                            let hashed_file = &validation::create_hashed_file(&path)?;
+                            if hashed_file != remote_file {
+                                return Err(anyhow::anyhow!("Forbidden modification: {:?}", path));
                             }
+                        } else {
+                            return Err(anyhow::anyhow!("Unknown file: {:?}", path));
                         }
                     }
                 }
-                _ => {}
             }
-        }
-        Ok(())
-    });
+        });
     let game_handle = tokio::task::spawn_blocking(move || {
         if let Some(info) = auth_info {
             handler.dispatch(|w| {
@@ -233,13 +229,10 @@ pub async fn select_game_dir(handler: Handle<()>) -> Result<()> {
         .try_lock()
         .map_err(|_e| anyhow::anyhow!("Вы уже выбираете папку!"))?;
     let response = nfd2::open_pick_folder(None)?;
-    match response {
-        Response::Okay(folder) => {
-            current_settings.game_dir = folder.to_slash_lossy();
-            current_settings.save()?;
-            update_settings(&current_settings, handler).await?;
-        }
-        _ => {}
+    if let Response::Okay(folder) = response {
+        current_settings.game_dir = folder.to_slash_lossy();
+        current_settings.save()?;
+        update_settings(&current_settings, handler).await?;
     }
     Ok(())
 }
@@ -247,7 +240,9 @@ pub async fn select_game_dir(handler: Handle<()>) -> Result<()> {
 pub async fn save_settings(settings: Settings, handler: Handle<()>) -> Result<()> {
     settings.save()?;
     update_settings(&settings, handler).await?;
-    SETTINGS.set(Arc::new(Mutex::new(settings)));
+    SETTINGS
+        .set(Arc::new(Mutex::new(settings)))
+        .expect("Can't update settings");
     Ok(())
 }
 
@@ -259,7 +254,7 @@ pub async fn update_settings(settings: &Settings, handler: Handle<()>) -> Result
     handler.dispatch(move |w| {
         w.eval(&format!(
             r#"app.backend.settings('{}')"#,
-            json.to_string().replace(r#"""#, r#"""#)
+            json.replace(r#"""#, r#"""#)
         ))?;
         Ok(())
     })?;

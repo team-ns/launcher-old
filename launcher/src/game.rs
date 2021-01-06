@@ -40,7 +40,7 @@ pub fn create_jvm(profile: Profile, dir: &str, ram: u64) -> Result<JavaVM> {
         match env::var_os("PATH") {
             Some(path) => {
                 let mut paths = env::split_paths(&path).collect::<Vec<_>>();
-                paths.push(PathBuf::from(bin_path));
+                paths.push(bin_path);
                 let new_path = env::join_paths(paths)?;
                 env::set_var("PATH", &new_path);
             }
@@ -67,7 +67,7 @@ pub fn start(jvm: JavaVM, profile: Profile, auth_info: AuthInfo, dir: &str) -> R
     };
     jni_env.register_native_methods(
         "com/mojang/authlib/yggdrasil/YggdrasilMinecraftSessionService",
-        &vec![method],
+        &[method],
     )?;
     jni_env
         .call_static_method(

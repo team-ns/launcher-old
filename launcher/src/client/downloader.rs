@@ -22,8 +22,8 @@ const CHUNK_SIZE: u64 = 512000;
 pub async fn download(files: Vec<(String, RemoteFile)>, handler: Handle<()>) -> Result<()> {
     let (progress_sender, mut receiver) = mpsc::unbounded_channel::<u64>();
     let total_size = files.iter().map(|file| file.1.size).sum::<u64>();
-
-    let (concurrent, single): (Vec<(String, RemoteFile)>, Vec<(String, RemoteFile)>) = files
+    type Download = (Vec<(String, RemoteFile)>, Vec<(String, RemoteFile)>);
+    let (concurrent, single): Download = files
         .into_iter()
         .partition(|file| file.1.size <= SMALL_SIZE);
 
@@ -37,48 +37,51 @@ pub async fn download(files: Vec<(String, RemoteFile)>, handler: Handle<()>) -> 
         })
         .peekable();
 
-    tokio::spawn(async move {
-        let mut receive_size = 0;
-        handler.dispatch(move |w| {
-            w.eval(&format!(
-                "app.backend.download.setTotalSize('{}')",
-                total_size
-            ));
-            Ok(())
-        });
-        loop {
-            if total_size == receive_size {
-                handler.dispatch(move |w| {
-                    w.eval("app.backend.download.wait()")?;
-                    Ok(())
-                });
-                return;
-            }
-            match receiver
-                .recv()
-                .await
-                .with_context(|| "Incorrect downloaded size!")
-            {
-                Ok(size) => {
-                    receive_size += size;
+    tokio::spawn(
+        #[allow(unused_must_use)]
+        async move {
+            let mut receive_size = 0;
+            handler.dispatch(move |w| {
+                w.eval(&format!(
+                    "app.backend.download.setTotalSize('{}')",
+                    total_size
+                ))?;
+                Ok(())
+            });
+            loop {
+                if total_size == receive_size {
                     handler.dispatch(move |w| {
-                        w.eval(&format!(
-                            "app.backend.download.updateSize('{}')",
-                            receive_size
-                        ))?;
-                        Ok(())
-                    });
-                }
-                Err(error) => {
-                    handler.dispatch(move |w| {
-                        w.eval(&format!("app.backend.error('{}')", error))?;
+                        w.eval("app.backend.download.wait()")?;
                         Ok(())
                     });
                     return;
                 }
+                match receiver
+                    .recv()
+                    .await
+                    .with_context(|| "Incorrect downloaded size!")
+                {
+                    Ok(size) => {
+                        receive_size += size;
+                        handler.dispatch(move |w| {
+                            w.eval(&format!(
+                                "app.backend.download.updateSize('{}')",
+                                receive_size
+                            ))?;
+                            Ok(())
+                        });
+                    }
+                    Err(error) => {
+                        handler.dispatch(move |w| {
+                            w.eval(&format!("app.backend.error('{}')", error))?;
+                            Ok(())
+                        });
+                        return;
+                    }
+                }
             }
-        }
-    });
+        },
+    );
 
     while tasks.peek().is_some() {
         join_tasks(tasks.by_ref().take(100)).await?;
@@ -111,7 +114,7 @@ pub async fn concurrent_download(
     progress_sender: UnboundedSender<u64>,
 ) -> Result<()> {
     let (sender, mut receiver) = mpsc::unbounded_channel();
-    let total_size = remote_file.size.clone();
+    let total_size = remote_file.size;
     let mut file = create_file(Path::new(&path)).await?;
     let uri: Uri = remote_file.uri.parse()?;
     let mut tasks = get_chunks(remote_file.size - 1)
@@ -201,7 +204,7 @@ where
         .into_iter()
         .map(|result| result.with_context(|| "Async task error!")?)
         .find(|result| result.is_err())
-        .unwrap_or_else(|| Ok(()))
+        .unwrap_or(Ok(()))
 }
 
 async fn create_file(path: &Path) -> Result<File, Error> {
