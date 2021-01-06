@@ -1,9 +1,10 @@
 use crate::client::{AuthInfo, Client};
 use crate::game;
 use crate::game::auth::{CHANNEL_GET, CHANNEL_SEND};
-use crate::runtime::CLIENT;
+use crate::runtime::{CLIENT, PLAYING};
 use crate::security::validation;
 use anyhow::Result;
+use log::error;
 use serde::{Deserialize, Serialize};
 
 use std::sync::Arc;
@@ -16,9 +17,9 @@ use crate::config::{Settings, SETTINGS};
 use nfd2::Response;
 use path_slash::PathBufExt;
 
-use futures::TryFutureExt;
-use jni::JavaVM;
-
+use notify::EventKind;
+use std::{env, fs};
+use sysinfo::SystemExt;
 use web_view::Handle;
 
 #[derive(Serialize, Deserialize)]
@@ -57,7 +58,7 @@ pub async fn login_user(
         w.eval(&format!(
             r#"app.backend.logined('{}')"#,
             json.to_string().replace(r#"""#, r#"""#)
-        ));
+        ))?;
         Ok(())
     })?;
     Ok(())
@@ -71,11 +72,11 @@ pub async fn ready(handler: Handle<()>) -> Result<()> {
                 Ok(s) => s,
                 Err(_e) => {
                     let s = Settings::default();
-                    s.save();
+                    s.save()?;
                     s
                 }
             };
-            update_settings(&settings, handler.clone()).await;
+            update_settings(&settings, handler.clone()).await?;
             SETTINGS.set(Arc::new(Mutex::new(settings.clone())));
             if settings.save_data {
                 let login = &settings.last_name.expect("Can't get login");
@@ -83,24 +84,27 @@ pub async fn ready(handler: Handle<()>) -> Result<()> {
                 let mut client = CLIENT.get().expect("Can't get client").lock().await;
                 login_user(&mut client, login, password, handler.clone()).await?;
             }
-            handler.dispatch(|w| {
-                w.eval("app.backend.ready()");
+            let mut system = sysinfo::System::new_all();
+            system.refresh_all();
+            let max_ram = system.get_total_memory() / 1024;
+            handler.dispatch(move |w| {
+                w.eval(&format!("app.backend.ready({})", max_ram))?;
                 Ok(())
-            });
+            })?;
         }
         Err(e) => {
             handler.dispatch(move |w| {
                 w.eval(&format!(
                     r#"app.backend.error("{}")"#,
                     e.to_string().replace(r#"""#, r#"""#)
-                ));
+                ))?;
                 Ok(())
-            });
+            })?;
             tokio::time::delay_for(Duration::from_secs(10)).await;
             handler.dispatch(move |w| {
                 w.exit();
                 Ok(())
-            });
+            })?;
         }
     }
     Ok(())
@@ -121,7 +125,7 @@ pub async fn login(
         current_settings.last_name = Some(login.clone());
         current_settings.saved_password = Some(password.clone());
         current_settings.save_data = true;
-        current_settings.save();
+        current_settings.save()?;
     }
     Ok(())
 }
@@ -144,59 +148,81 @@ pub async fn start_client(
 ) -> Result<()> {
     let mut client = socket.lock().await;
     let resources = client.get_resources(&profile).await?;
+    let remote_directory = validation::new_remote_directory(resources);
     let settings = SETTINGS.get().expect("Can't get settings").lock().await;
     let game_dir = settings.game_dir.clone();
+    let ram = settings.ram;
     let profile = client.get_profile(&profile).await?.profile;
-    let watcher = validation::validate_profile(&profile, resources, handler.clone()).await?;
+    let watcher =
+        validation::validate_profile(&profile, &remote_directory, handler.clone()).await?;
     let auth_info = client.auth_info.clone();
     drop(client);
-    let jvm = game::create_jvm(profile.clone(), &game_dir)?;
-    //Safe JVM struct clone for get non-send JNIEnv in task
-    let jvm_copy = unsafe {
-        JavaVM::from_raw(jvm.get_java_vm_pointer()).expect("Failed to get copy of JavaVM")
-    };
-    let watcher_handle = tokio::task::spawn_blocking(move || unsafe {
+    PLAYING.set(()).expect("Can't set playing status");
+    let jvm = game::create_jvm(profile.clone(), &game_dir, ram)?;
+    let watcher_handle = tokio::task::spawn_blocking(move || {
         loop {
-            match watcher.receiver.recv() {
-                Ok(message) => jvm_copy.attach_current_thread_as_daemon()
-                    .expect("Failed to get JNIEnv!")
-                    .throw(format!(
-                        "Forbidden modification: {:?}",
-                        message.map(|e| e.paths)
-                    ))
-                    .expect("Failed to close game!"),
-                Err(_) => jvm_copy
-                    .attach_current_thread_as_daemon()
-                    .expect("Failed to get JNIEnv!")
-                    .throw("WatcherService had been closed before game end!")
-                    .expect("Failed to close game!"),
+            let event = watcher.receiver.recv()??;
+            match event.kind {
+                EventKind::Modify(_) => {
+                    for path in event.paths {
+                        if path.is_file() {
+                            error!("Directory {:?}", remote_directory);
+                            if remote_directory.contains_key(&path) {
+                                let remote_file = &remote_directory[&path];
+                                let hashed_file = &validation::create_hashed_file(&path)?;
+                                if hashed_file != remote_file {
+                                    return Err(anyhow::anyhow!(
+                                        "Forbidden modification: {:?}",
+                                        path
+                                    ));
+                                }
+                            } else {
+                                return Err(anyhow::anyhow!("Unknown file: {:?}", path));
+                            }
+                        }
+                    }
+                }
+                _ => {}
             }
         }
+        Ok(())
     });
     let game_handle = tokio::task::spawn_blocking(move || {
         if let Some(info) = auth_info {
             handler.dispatch(|w| {
                 w.exit();
                 Ok(())
-            });
+            })?;
             game::start(jvm, profile, info, &game_dir)?;
         } else {
             return Err(anyhow::anyhow!("Start game before auth!"));
         }
         Ok(())
     });
-    let _join_handle = tokio::spawn(async {
+    let join_handle = tokio::spawn(async {
         loop {
             let (token, profile, server) = CHANNEL_GET.1.lock().unwrap().recv().unwrap();
             let mut client = CLIENT.get().unwrap().lock().await;
             match client.join(&token, &profile, &server).await {
                 Err(e) => CHANNEL_SEND.0.lock().unwrap().send(format!("{}", e)),
                 _ => CHANNEL_SEND.0.lock().unwrap().send("".to_string()),
-            };
+            }
+            .expect("Can't send join request");
         }
     });
-    watcher_handle.await?;
-    game_handle.await??;
+    let game_handle = futures::future::join(game_handle, join_handle);
+    tokio::select! {
+        watch_result = watcher_handle => {
+            if let Err(e) = watch_result? {
+                error!("Game stopped! Cause: {}", e);
+                std::process::exit(-1);
+            }
+        }
+        game_result = game_handle => {
+            game_result.0??;
+        }
+
+    }
     Ok(())
 }
 
@@ -210,8 +236,8 @@ pub async fn select_game_dir(handler: Handle<()>) -> Result<()> {
     match response {
         Response::Okay(folder) => {
             current_settings.game_dir = folder.to_slash_lossy();
-            current_settings.save();
-            update_settings(&current_settings, handler).await;
+            current_settings.save()?;
+            update_settings(&current_settings, handler).await?;
         }
         _ => {}
     }
@@ -220,20 +246,22 @@ pub async fn select_game_dir(handler: Handle<()>) -> Result<()> {
 
 pub async fn save_settings(settings: Settings, handler: Handle<()>) -> Result<()> {
     settings.save()?;
-    update_settings(&settings, handler).await;
+    update_settings(&settings, handler).await?;
     SETTINGS.set(Arc::new(Mutex::new(settings)));
     Ok(())
 }
 
 pub async fn update_settings(settings: &Settings, handler: Handle<()>) -> Result<()> {
     let settings = settings.clone();
+    fs::create_dir_all(&settings.game_dir)?;
+    env::set_current_dir(&settings.game_dir)?;
     let json = serde_json::to_string(&settings)?;
     handler.dispatch(move |w| {
         w.eval(&format!(
             r#"app.backend.settings('{}')"#,
             json.to_string().replace(r#"""#, r#"""#)
-        ));
+        ))?;
         Ok(())
-    });
+    })?;
     Ok(())
 }

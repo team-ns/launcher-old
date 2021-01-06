@@ -1,14 +1,9 @@
-use anyhow::{Result};
+use anyhow::Result;
 
 use launcher_api::profile::Profile;
-use notify::{Error, Event, PollWatcher, RecommendedWatcher, RecursiveMode, Watcher as _};
+use notify::{Error, Event, PollWatcher, RecommendedWatcher, RecursiveMode};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
-
-
-
-
-
 
 enum Watcher {
     Recommended(RecommendedWatcher),
