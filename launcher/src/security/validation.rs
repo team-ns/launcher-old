@@ -129,14 +129,13 @@ pub fn get_os_type() -> OsType {
     let os_type = OsType::MacOSX64;
     #[cfg(all(target_os = "linux"))]
     let os_type = {
-        use uname;
         let info = uname::uname().expect("Can't get os info");
 
-        Ok(match info.machine.as_ref() {
+        match info.machine.as_ref() {
             "i686" => OsType::LinuxX32,
             "x86_64" => OsType::LinuxX64,
             _ => unreachable!(),
-        })
+        }
     };
     #[cfg(all(target_os = "windows"))]
     let os_type = {
