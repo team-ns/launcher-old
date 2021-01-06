@@ -14,6 +14,8 @@ pub struct Profile {
     pub client_args: Vec<String>,
     pub assets: String,
     pub assets_dir: String,
+    pub server_name: String,
+    pub server_port: u32,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
