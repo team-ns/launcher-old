@@ -23,8 +23,9 @@ const JVM_LIB_PATH: &str = "lib/i386/server/libjvm.so";
 #[cfg(target_os = "macos")]
 const JVM_LIB_PATH: &str = "lib/server/libjvm.dylib";
 
-pub fn create_jvm(profile: Profile, dir: &str) -> Result<JavaVM> {
+pub fn create_jvm(profile: Profile, dir: &str, ram: u64) -> Result<JavaVM> {
     let args = InitArgsBuilder::new()
+        .option(&format!("-Xmx{}M", ram))
         .option("-Dfml.ignoreInvalidMinecraftCertificates=true")
         .option("-Dfml.ignorePatchDiscrepancies=true")
         .option("-XX:+DisableAttachMechanism")
@@ -34,7 +35,7 @@ pub fn create_jvm(profile: Profile, dir: &str) -> Result<JavaVM> {
         .build();
 
     if cfg!(windows) {
-        let mut bin_path = env::current_dir()?;
+        let mut bin_path = PathBuf::from(dir);
         bin_path.push("jre/bin");
         match env::var_os("PATH") {
             Some(path) => {
@@ -46,10 +47,9 @@ pub fn create_jvm(profile: Profile, dir: &str) -> Result<JavaVM> {
             None => env::set_var("PATH", bin_path),
         }
     }
-
     match args {
         Ok(args) => {
-            env::set_current_dir(profile.get_client_dir(dir));
+            env::set_current_dir(profile.get_client_dir(dir))?;
             let lib: Container<JvmLibrary> =
                 unsafe { Container::load(Path::new(dir).join("jre").join(JVM_LIB_PATH))? };
             Ok(JavaVM::new(args, lib)?)
@@ -68,14 +68,13 @@ pub fn start(jvm: JavaVM, profile: Profile, auth_info: AuthInfo, dir: &str) -> R
     jni_env.register_native_methods(
         "com/mojang/authlib/yggdrasil/YggdrasilMinecraftSessionService",
         &vec![method],
-    );
-    env::set_current_dir(profile.get_client_dir(dir))?;
+    )?;
     jni_env
         .call_static_method(
             &profile.main_class,
             "main",
             "([Ljava/lang/String;)V",
-            &[profile.create_args(dir, &jni_env, auth_info)],
+            &[profile.create_args(dir, &jni_env, auth_info, &profile)],
         )?
         .v()?;
     Ok(())
