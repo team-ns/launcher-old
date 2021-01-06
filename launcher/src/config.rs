@@ -17,15 +17,16 @@ pub static SETTINGS: OnceCell<Arc<Mutex<Settings>>> = OnceCell::new();
 pub struct Config {
     pub game_dir: String,
     pub websocket: String,
-    pub ram: u32,
+    pub ram: u64,
     pub file_server: String,
+    pub project_name: String,
 }
 
 impl Configurable for Config {}
 
 impl Default for Config {
     fn default() -> Self {
-        let config_json = include_str!("../config.json")
+        let config_json = obfstr::obfstr!(include_str!("../config.json"))
             .replace("%homeDir%", &dirs::home_dir().unwrap().to_slash_lossy());
         serde_json::from_str(&config_json).unwrap()
     }
@@ -36,7 +37,7 @@ impl Default for Config {
 pub struct Settings {
     pub game_dir: String,
     pub save_data: bool,
-    pub ram: u32,
+    pub ram: u64,
     pub saved_password: Option<String>,
     pub last_name: Option<String>,
 }

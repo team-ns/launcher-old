@@ -1,6 +1,6 @@
 use crate::client::Client;
 
-use log::debug;
+use log::{debug, error};
 use messages::RuntimeMessage;
 use once_cell::sync::OnceCell;
 use std::sync::Arc;
@@ -9,24 +9,28 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::Mutex;
 
 use crate::config::CONFIG;
-use std::{env, fs};
 use web_view::{Content, Handle, WVResult, WebView};
 
 mod messages;
 
 pub static CLIENT: OnceCell<Arc<Mutex<Client>>> = OnceCell::new();
 
+pub static PLAYING: OnceCell<()> = OnceCell::new();
+
 #[macro_export]
 macro_rules! handle_error {
     ($handler:expr, $result:expr) => {
         if let Err(error) = $result {
-            $handler.dispatch(move |w| {
-                w.eval(&format!(
-                    r#"app.backend.error("{}")"#,
-                    error.to_string().replace(r#"""#, r#"""#)
-                ));
-                Ok(())
-            });
+            error!("Runtime message error: {}", error);
+            $handler
+                .dispatch(move |w| {
+                    w.eval(&format!(
+                        r#"app.backend.error("{}")"#,
+                        error.to_string().replace(r#"""#, r#"""#)
+                    ))?;
+                    Ok(())
+                })
+                .expect("Can't eval error");
         }
     };
 }
@@ -36,15 +40,13 @@ pub async fn start() {
     let message_handle = tokio::task::spawn(async move {
         message_loop(rx).await;
     });
-    fs::create_dir_all(&CONFIG.game_dir);
-    env::set_current_dir(&CONFIG.game_dir);
     let ui_handle = tokio::task::spawn_blocking(move || {
         let webview = web_view::builder()
-            .title("NSLauncher")
+            .title(&CONFIG.project_name)
             .content(Content::Html(include_str!("../runtime/index.html")))
             .size(1000, 600)
             .resizable(false)
-            .debug(true)
+            .debug(cfg!(debug_assertions))
             .user_data(())
             .invoke_handler(move |view, arg| invoke_handler(view, arg, tx.clone()))
             .build()
@@ -52,7 +54,10 @@ pub async fn start() {
         webview.run().expect("Can't run webview runtime");
     });
     ui_handle.await;
-    drop(message_handle);
+    if PLAYING.get().is_none() {
+        std::process::exit(0);
+    }
+    message_handle.await;
 }
 
 fn invoke_handler(
@@ -71,7 +76,9 @@ fn invoke_handler(
 async fn message_loop(mut recv: UnboundedReceiver<(RuntimeMessage, Handle<()>)>) {
     loop {
         match recv.recv().await {
-            None => {}
+            None => {
+                break;
+            }
             Some(message) => {
                 let handler = message.1;
                 let error_handler = handler.clone();
