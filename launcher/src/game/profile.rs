@@ -15,7 +15,13 @@ pub trait ClientProfile {
     fn new(path: &str) -> Self;
     fn create_lib_string(&self, dir: &str) -> String;
     fn get_native_option(&self, dir: &str) -> String;
-    fn create_args(&self, dir: &str, env: &JNIEnv, auth_info: AuthInfo) -> JValue;
+    fn create_args(
+        &self,
+        dir: &str,
+        env: &JNIEnv,
+        auth_info: AuthInfo,
+        profile: &Profile,
+    ) -> JValue;
     fn get_client_dir(&self, dir: &str) -> PathBuf;
 }
 
@@ -50,7 +56,13 @@ impl ClientProfile for Profile {
         )
     }
 
-    fn create_args(&self, dir: &str, env: &JNIEnv, auth_info: AuthInfo) -> JValue {
+    fn create_args(
+        &self,
+        dir: &str,
+        env: &JNIEnv,
+        auth_info: AuthInfo,
+        profile: &Profile,
+    ) -> JValue {
         let mut args = self.client_args.clone();
         args.push(String::from("--gameDir"));
         args.push(self.get_client_dir(dir).to_string_lossy().to_string());
@@ -69,6 +81,10 @@ impl ClientProfile for Profile {
         args.push(auth_info.access_token);
         args.push(String::from("--username"));
         args.push(auth_info.username);
+        args.push(String::from("--server"));
+        args.push(profile.server_name.clone());
+        args.push(String::from("--port"));
+        args.push(profile.server_port.to_string());
         let array = env
             .new_object_array(
                 args.len() as i32,
