@@ -29,7 +29,9 @@ impl LaunchServer {
         logger::configure();
         bundle::unpack_launcher();
         info!("Read config file...");
-        let config = Config::get_config(Path::new("config.json")).expect("Can't read config file!");
+        let mut config =
+            Config::get_config(Path::new("config.json")).expect("Can't read config file!");
+        config.init().expect("Can't initialize configuration");
         info!("Launch server starting...");
         let (profiles, profiles_info) = profile::get_profiles();
         let mut security = SecurityManager::default();
