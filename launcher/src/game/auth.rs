@@ -60,16 +60,18 @@ pub(crate) extern "system" fn Java_com_mojang_authlib_yggdrasil_launcherJoinRequ
     };
     let server: String = { jni.get_string(jni.get_field("serverId", "Ljava/lang/String;")) };
     let token: String = { jni.get_string(jni.get_field("accessToken", "Ljava/lang/String;")) };
-    CHANNEL_GET.0.lock().unwrap().send((
-        String::from(token),
-        profile.clone(),
-        String::from(server),
-    ));
+    CHANNEL_GET
+        .0
+        .lock()
+        .unwrap()
+        .send((String::from(token), profile.clone(), String::from(server)))
+        .expect("Can't send join info to client");
     let string = CHANNEL_SEND.1.lock().unwrap().recv().unwrap();
     if !string.is_empty() {
         env.throw_new(
             "com/mojang/authlib/exceptions/AuthenticationException",
             string,
-        );
+        )
+        .expect("Can't throw auth exception");
     }
 }
