@@ -4,7 +4,6 @@ version = "0.0.1"
 authors = ["Jeb", "Belz"]
 edition = "2018"
 
-
 [dependencies]
 serde_json = "1.0"
 base64 = "0.12.1"
@@ -49,7 +48,3 @@ features = ["json"]
 [dependencies.rust-embed]
 version = "5.6"
 features = ["interpolate-folder-path"]
-
-[profile.release]
-lto = true
-opt-level = 'z'
