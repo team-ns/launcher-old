@@ -55,7 +55,7 @@ pub(crate) extern "system" fn Java_com_mojang_authlib_yggdrasil_launcherJoinRequ
         }
     }
 
-    let jni = JNI(env.clone(), request);
+    let jni = JNI(env, request);
     let profile: Uuid = {
         let result = jni.to_string(jni.get_field("selectedProfile", "Ljava/util/UUID;"));
         Uuid::from_str(&jni.get_string(result)).expect("Can't parse game profile unique id")
