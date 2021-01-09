@@ -44,8 +44,8 @@ pub(crate) extern "system" fn Java_com_mojang_authlib_yggdrasil_launcherJoinRequ
         }
         fn to_string(
             &self,
-            result: Result<JObject, jni::errors::Error>,
-        ) -> Result<JObject, jni::errors::Error> {
+            result: Result<JObject<'a>, jni::errors::Error>,
+        ) -> Result<JObject<'a>, jni::errors::Error> {
             result
                 .and_then(|obj| {
                     self.0
