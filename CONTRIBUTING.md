@@ -64,6 +64,7 @@ The following is the list of supported scopes:
 * `client`
 * `server`
 * `api`
+* `macro`
 
 
 #### Revert commits
