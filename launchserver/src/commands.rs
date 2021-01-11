@@ -1,3 +1,4 @@
+use launcher_macro::{command, register_commands};
 use log::info;
 use rustyline::completion::{extract_word, Completer};
 use rustyline::error::ReadlineError;
@@ -13,28 +14,18 @@ use tokio::sync::RwLock;
 use crate::server::profile;
 use crate::LaunchServer;
 
-type CmdFn = Box<dyn Fn(&mut LaunchServer, &[&str]) + Send + Sync>;
+type CmdFn = fn(&mut LaunchServer, &[&str]);
 
 struct Command {
-    name: String,
-    description: String,
+    name: &'static str,
+    description: &'static str,
     func: CmdFn,
-}
-
-impl Command {
-    fn new(name: &str, description: &str, command: CmdFn) -> Self {
-        Command {
-            name: name.to_string(),
-            description: description.to_string(),
-            func: command,
-        }
-    }
 }
 
 #[derive(Hinter, Helper, Validator, Highlighter)]
 struct CommandHelper {
     server: Arc<RwLock<LaunchServer>>,
-    commands: HashMap<String, Command>,
+    commands: HashMap<&'static str, &'static Command>,
 }
 
 impl Completer for CommandHelper {
@@ -79,10 +70,10 @@ impl CommandHelper {
             }
             return;
         }
-        let selected_command = self.commands.get(&args[0].to_string());
+        let selected_command = self.commands.get(&args[0]);
         match selected_command {
             None => println!("Command not found. Use help."),
-            Some(c) => {
+            Some(&c) => {
                 let args = &args[1..];
                 let mut server = self.server.write().await;
                 (c.func)(server.deref_mut(), args);
@@ -90,14 +81,8 @@ impl CommandHelper {
         }
     }
 
-    pub fn new_command<F>(&mut self, name: &str, description: &str, command: F)
-    where
-        F: Fn(&mut LaunchServer, &[&str]) + Send + Sync + 'static,
-    {
-        self.commands.insert(
-            name.to_string(),
-            Command::new(name, description, Box::new(command)),
-        );
+    pub fn new_command(&mut self, command: &'static Command) {
+        self.commands.insert(&command.name, command);
     }
 }
 
@@ -111,7 +96,7 @@ pub async fn start(server: Arc<RwLock<LaunchServer>>) {
             .build();
         let mut rl: Editor<CommandHelper> = Editor::with_config(rl_config);
         let mut helper = CommandHelper::new(server);
-        register_command(&mut helper);
+        register_commands!(rehash, sync);
         rl.set_helper(Some(helper));
         loop {
             let readline = rl.readline("");
@@ -133,11 +118,7 @@ pub async fn start(server: Arc<RwLock<LaunchServer>>) {
     });
 }
 
-fn register_command(helper: &mut CommandHelper) {
-    helper.new_command("rehash", "Update checksum of profile files", rehash);
-    helper.new_command("sync", "Sync profile list between server and client", sync);
-}
-
+#[command(description = "Update checksum of profile files")]
 pub fn rehash(server: &mut LaunchServer, args: &[&str]) {
     server.security.rehash(
         server.profiles.values(),
@@ -146,6 +127,7 @@ pub fn rehash(server: &mut LaunchServer, args: &[&str]) {
     );
 }
 
+#[command(description = "Sync profile list between server and client")]
 pub fn sync(server: &mut LaunchServer, _args: &[&str]) {
     let (profiles, profiles_info) = profile::get_profiles();
     server.profiles = profiles;
