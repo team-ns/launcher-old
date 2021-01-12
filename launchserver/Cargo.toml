@@ -29,6 +29,9 @@ path-slash = "0.1.1"
 [dependencies.launcher_api]
 path = "../launcherapi"
 
+[dependencies.launcher_macro]
+path = "../utils-macro"
+
 [dependencies.serde]
 version = "1.0"
 features = ["derive"]

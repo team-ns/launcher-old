@@ -1,0 +1,15 @@
+[package]
+name = "launcher_macro"
+version = "0.0.1"
+authors = ["Belz"]
+edition = "2018"
+
+[dependencies]
+quote = "1.0"
+
+[dependencies.syn]
+version = "1.0"
+features = ["full"]
+
+[lib]
+proc-macro = true
