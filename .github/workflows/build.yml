@@ -1,0 +1,53 @@
+on: release
+
+name: Build nslaunchserver
+
+jobs:
+  linux:
+    name: Linux Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          use-cross: false
+          command: build
+          args: --release --target=${{ matrix.target }} --package nslaunchserver
+      - name: Push artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/nslaunchserver
+  windows:
+    name: Windows Build
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-pc-windows-gnu
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          use-cross: false
+          command: build
+          args: --release --target=${{ matrix.target }} --package nslaunchserver
+      - name: Push artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/nslaunchserver.exe
