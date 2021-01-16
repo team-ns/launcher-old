@@ -1,4 +1,4 @@
-on: [release, push]
+on: release
 
 name: Build nslaunchserver
 
