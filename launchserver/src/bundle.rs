@@ -15,8 +15,8 @@ struct Launcher;
 struct LauncherApi;
 
 pub fn unpack_launcher() {
-    unpack::<LauncherApi>("launcher").expect("Can't unpack launcher");
-    unpack::<Launcher>("launcherapi").expect("Can't unpack api");
+    unpack::<LauncherApi>("launcherapi").expect("Can't unpack api");
+    unpack::<Launcher>("launcher").expect("Can't unpack launcher");
 }
 
 fn unpack<T: RustEmbed>(folder: &str) -> Result<()> {
