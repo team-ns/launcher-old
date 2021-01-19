@@ -33,8 +33,8 @@ pub fn create_jvm(profile: Profile, dir: &str, ram: u64) -> Result<JavaVM> {
         .option(&profile.create_lib_string(dir))
         .version(JNIVersion::V8);
 
-    for arg in profile.jvm_args {
-        args = args.option(&arg)
+    for arg in &profile.jvm_args {
+        args = args.option(arg)
     }
 
     if cfg!(windows) {
