@@ -31,6 +31,7 @@ nfd2 = "0.2"
 t1ha = "0.1.0"
 sysinfo = "0.15"
 obfstr = "0.2"
+lazy-static-include = "3.0.5"
 
 [dependencies.web-view]
 git = "https://github.com/team-ns/web-view"

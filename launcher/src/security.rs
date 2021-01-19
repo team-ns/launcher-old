@@ -4,9 +4,13 @@ use rand::rngs::OsRng;
 pub mod validation;
 mod watcher;
 
+lazy_static_include_bytes! {
+    PUBLIC_KEY => "../public_key"
+}
+
 pub fn get_manager() -> SecurityManager {
     SecurityManager {
-        public_key: PublicKey::from_bytes(include_bytes!("../public_key")).unwrap(),
+        public_key: PublicKey::from_bytes(*PUBLIC_KEY).unwrap(),
     }
 }
 
