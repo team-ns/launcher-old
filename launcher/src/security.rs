@@ -1,4 +1,5 @@
 use ecies_ed25519::PublicKey;
+use lazy_static_include::lazy_static_include_bytes;
 use rand::rngs::OsRng;
 
 pub mod validation;
