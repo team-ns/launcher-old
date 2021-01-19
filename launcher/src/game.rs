@@ -24,15 +24,18 @@ const JVM_LIB_PATH: &str = "lib/i386/server/libjvm.so";
 const JVM_LIB_PATH: &str = "lib/server/libjvm.dylib";
 
 pub fn create_jvm(profile: Profile, dir: &str, ram: u64) -> Result<JavaVM> {
-    let args = InitArgsBuilder::new()
+    let mut args = InitArgsBuilder::new()
         .option(&format!("-Xmx{}M", ram))
         .option("-Dfml.ignoreInvalidMinecraftCertificates=true")
         .option("-Dfml.ignorePatchDiscrepancies=true")
         .option("-XX:+DisableAttachMechanism")
         .option(&profile.get_native_option(dir))
         .option(&profile.create_lib_string(dir))
-        .version(JNIVersion::V8)
-        .build();
+        .version(JNIVersion::V8);
+
+    for arg in profile.jvm_args {
+        args = args.option(&arg)
+    }
 
     if cfg!(windows) {
         let mut bin_path = PathBuf::from(dir);
@@ -47,7 +50,8 @@ pub fn create_jvm(profile: Profile, dir: &str, ram: u64) -> Result<JavaVM> {
             None => env::set_var("PATH", bin_path),
         }
     }
-    match args {
+
+    match args.build() {
         Ok(args) => {
             env::set_current_dir(profile.get_client_dir(dir))?;
             let lib: Container<JvmLibrary> =
