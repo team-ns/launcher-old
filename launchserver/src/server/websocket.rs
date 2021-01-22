@@ -219,36 +219,31 @@ impl Handle for AuthMessage {
     ) {
         let server = server.read().await;
         //TODO ADD IP FOR LIMITERS
-        let ip = "".to_string();
+        let ip = client.ip.clone();
         send(tx, async {
             let password = server.security.decrypt(&self.password)?;
             let result = server.config.auth.auth(&self.login, &password, &ip).await?;
-            if result.message.is_none() {
-                let digest = {
-                    let mut rng = rand::thread_rng();
-                    md5::compute(format!(
-                        "{}{}{}",
-                        rng.gen_range(1000000000, 2147483647),
-                        rng.gen_range(1000000000, 2147483647),
-                        rng.gen_range(0, 9)
-                    ))
-                };
-                let access_token = format!("{:x}", digest);
-                let uuid = result.uuid.unwrap();
-                server
-                    .config
-                    .auth
-                    .update_access_token(&uuid, &access_token)
-                    .await?;
-                client.username = Some(self.login.clone());
-                client.access_token = Some(access_token.clone());
-                Ok(ServerMessage::Auth(AuthResponse {
-                    uuid: uuid.to_string(),
-                    access_token: access_token.to_string(),
-                }))
-            } else {
-                Err(anyhow::anyhow!("{}", result.message.unwrap()))
-            }
+            let digest = {
+                let mut rng = rand::thread_rng();
+                md5::compute(format!(
+                    "{}{}{}",
+                    rng.gen_range(1000000000, 2147483647),
+                    rng.gen_range(1000000000, 2147483647),
+                    rng.gen_range(0, 9)
+                ))
+            };
+            let access_token = format!("{:x}", digest);
+            server
+                .config
+                .auth
+                .update_access_token(&result, &access_token)
+                .await?;
+            client.username = Some(self.login.clone());
+            client.access_token = Some(access_token.clone());
+            Ok(ServerMessage::Auth(AuthResponse {
+                uuid: result.to_string(),
+                access_token: access_token.to_string(),
+            }))
         })
         .await;
     }
