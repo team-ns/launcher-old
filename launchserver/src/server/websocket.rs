@@ -16,6 +16,7 @@ use std::hash::Hash;
 use tokio::macros::support::Future;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::{mpsc, RwLock};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use warp::filters::ws::{Message, WebSocket};
 
 use crate::security::NativeVersion;
@@ -41,6 +42,7 @@ impl Client {
 pub async fn ws_api(ws: WebSocket, server: Arc<RwLock<LaunchServer>>, ip: String) {
     let (ws_tx, mut ws_rx) = ws.split();
     let (tx, rx) = mpsc::unbounded_channel();
+    let rx = UnboundedReceiverStream::new(rx);
     tokio::task::spawn(rx.forward(ws_tx).map(|result| {
         if let Err(e) = result {
             error!("Websocket send error: {}", e);
