@@ -78,15 +78,24 @@ pub async fn ready(handler: Handle<()>) -> Result<()> {
                     s
                 }
             };
-            update_settings(&settings, handler.clone()).await?;
             SETTINGS
                 .set(Arc::new(Mutex::new(settings.clone())))
                 .expect("Can't update settings");
+            update_settings(&settings, handler.clone()).await?;
             if settings.save_data {
                 let login = &settings.last_name.expect("Can't get login");
                 let password = &settings.saved_password.expect("Can't get saved password");
                 let mut client = CLIENT.get().expect("Can't get client").lock().await;
-                login_user(&mut client, login, password, handler.clone()).await?;
+                let login_result = login_user(&mut client, login, password, handler.clone()).await;
+                if login_result.is_err() {
+                    let mut current_settings =
+                        SETTINGS.get().expect("Can't take settings").lock().await;
+                    current_settings.last_name = None;
+                    current_settings.saved_password = None;
+                    current_settings.save_data = false;
+                    current_settings.save()?;
+                    login_result?;
+                }
             }
             let mut system = sysinfo::System::new_all();
             system.refresh_all();
@@ -124,11 +133,16 @@ pub async fn login(
     let mut client = socket.lock().await;
     let password = client.get_encrypted_password(&password).await;
     login_user(&mut client, &login, &password, handler.clone()).await?;
+    let mut current_settings = SETTINGS.get().expect("Can't take settings").lock().await;
     if remember {
-        let mut current_settings = SETTINGS.get().expect("Can't take settings").lock().await;
         current_settings.last_name = Some(login.clone());
         current_settings.saved_password = Some(password.clone());
         current_settings.save_data = true;
+        current_settings.save()?;
+    } else if current_settings.save_data {
+        current_settings.last_name = None;
+        current_settings.saved_password = None;
+        current_settings.save_data = false;
         current_settings.save()?;
     }
     Ok(())
