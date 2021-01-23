@@ -31,7 +31,7 @@ impl LaunchServer {
         info!("Read config file...");
         let mut config =
             Config::get_config(Path::new("config.json")).expect("Can't read config file!");
-        config.init().expect("Can't initialize configuration");
+        config.init().await.expect("Can't initialize configuration");
         info!("Launch server starting...");
         let (profiles, profiles_info) = profile::get_profiles();
         let mut security = SecurityManager::default();

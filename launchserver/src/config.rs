@@ -1,10 +1,12 @@
-use crate::config::auth::{AuthProvide, AuthResult, Entry};
-use crate::config::AuthProvider::{Empty, JSON};
+use crate::config::auth::json::JsonAuthProvider;
+use crate::config::auth::sql::SqlAuthProvider;
+use crate::config::auth::{AuthProvide, Entry};
+use crate::config::AuthProvider::Empty;
 use anyhow::Result;
 use launcher_api::config::Configurable;
 use log::error;
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
+
 use std::clone::Clone;
 use uuid::Uuid;
 
@@ -33,18 +35,7 @@ pub struct TextureProvider {
 pub enum AuthProvider {
     Empty,
     JSON(JsonAuthProvider),
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct JsonAuthProvider {
-    pub auth_url: String,
-    pub entry_url: String,
-    pub update_server_id_url: String,
-    pub update_access_token_url: String,
-    pub api_key: String,
-    #[serde(skip)]
-    pub client: Option<Client>,
+    SQL(SqlAuthProvider),
 }
 
 impl Configurable for Config {}
@@ -66,26 +57,27 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn init(&mut self) -> Result<()> {
-        self.auth.init()?;
+    pub async fn init(&mut self) -> Result<()> {
+        self.auth.init().await?;
         Ok(())
     }
 }
 
 impl AuthProvider {
-    pub fn init(&mut self) -> Result<()> {
+    pub async fn init(&mut self) -> Result<()> {
         match self {
             Empty => {
                 error!("Auth provider not found, check your config!");
                 Err(anyhow::anyhow!(
-                    "Can't authorize account. Please contact to administration!".to_string()
+                    "Can't initialize launchserver. Auth provider not configured!".to_string()
                 ))
             }
-            JSON(json) => json.init(),
+            AuthProvider::JSON(json) => json.init().await,
+            AuthProvider::SQL(sql) => sql.init().await,
         }
     }
 
-    pub async fn auth(&self, login: &str, password: &str, ip: &str) -> Result<AuthResult> {
+    pub async fn auth(&self, login: &str, password: &str, ip: &str) -> Result<Uuid> {
         match self {
             Empty => {
                 error!("Auth provider not found, check your config!");
@@ -93,7 +85,8 @@ impl AuthProvider {
                     "Can't authorize account. Please contact to administration!".to_string()
                 ))
             }
-            JSON(json) => json.auth(login, password, ip).await,
+            AuthProvider::JSON(json) => json.auth(login, password, ip).await,
+            AuthProvider::SQL(sql) => sql.auth(login, password, ip).await,
         }
     }
 
@@ -105,7 +98,8 @@ impl AuthProvider {
                     "Can't get account entry. Please contact to administration!".to_string()
                 ))
             }
-            JSON(json) => json.get_entry(uuid).await,
+            AuthProvider::JSON(json) => json.get_entry(uuid).await,
+            AuthProvider::SQL(sql) => sql.get_entry(uuid).await,
         }
     }
     pub async fn get_entry_from_name(&self, username: &str) -> Result<Entry> {
@@ -116,7 +110,8 @@ impl AuthProvider {
                     "Can't get account entry. Please contact to administration!".to_string()
                 ))
             }
-            JSON(json) => json.get_entry_from_name(username).await,
+            AuthProvider::JSON(json) => json.get_entry_from_name(username).await,
+            AuthProvider::SQL(sql) => sql.get_entry_from_name(username).await,
         }
     }
     pub async fn update_access_token(&self, uuid: &Uuid, token: &str) -> Result<()> {
@@ -127,7 +122,8 @@ impl AuthProvider {
                     "Can't authorize account. Please contact to administration!".to_string()
                 ))
             }
-            JSON(json) => json.update_access_token(uuid, token).await,
+            AuthProvider::JSON(json) => json.update_access_token(uuid, token).await,
+            AuthProvider::SQL(sql) => sql.update_access_token(uuid, token).await,
         }
     }
     pub async fn update_server_id(&self, uuid: &Uuid, server_id: &str) -> Result<()> {
@@ -138,7 +134,8 @@ impl AuthProvider {
                     "Can't authorize account. Please contact to administration!".to_string()
                 ))
             }
-            JSON(json) => json.update_server_id(uuid, server_id).await,
+            AuthProvider::JSON(json) => json.update_server_id(uuid, server_id).await,
+            AuthProvider::SQL(sql) => sql.update_server_id(uuid, server_id).await,
         }
     }
 }
