@@ -27,9 +27,9 @@ pub(crate) async fn has_join(
     request: HasJoinRequest,
     data: Arc<RwLock<LaunchServer>>,
 ) -> Result<impl Reply, warp::Rejection> {
-    let data = data.read().await;
-    let texture = &data.config.texture;
-    let auth = &data.config.auth;
+    let server = data.read().await;
+    let texture = &server.config.texture;
+    let auth = &server.auth_provider;
     let entry = auth.get_entry_from_name(&request.username).await;
     match entry {
         Err(_e) => Ok(warp::reply::with_status(
