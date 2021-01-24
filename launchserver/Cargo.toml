@@ -39,7 +39,7 @@ features = ["derive"]
 
 [dependencies.uuid]
 version = "0.8"
-features = ["serde"]
+features = ["serde", "v4"]
 
 [dependencies.tokio]
 version = "1.0"
@@ -52,6 +52,9 @@ features = ["json"]
 [dependencies.rust-embed]
 version = "5.6"
 features = ["interpolate-folder-path"]
+
+[dependencies.multi-map]
+git = "https://github.com/team-ns/multi-map"
 
 [dependencies.sqlx]
 git = "https://github.com/team-ns/sqlx"
