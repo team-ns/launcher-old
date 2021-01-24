@@ -1,4 +1,5 @@
-use crate::config::auth::{AuthProvide, Entry};
+use crate::auth::{AuthProvide, Entry};
+use crate::config::auth::JsonAuthConfig;
 use anyhow::Result;
 use async_trait::async_trait;
 use reqwest::Client;
@@ -8,16 +9,25 @@ use uuid::Uuid;
 use warp::http::HeaderMap;
 use warp::hyper::header::HeaderName;
 
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct JsonAuthProvider {
-    pub auth_url: String,
-    pub entry_url: String,
-    pub update_server_id_url: String,
-    pub update_access_token_url: String,
-    pub api_key: String,
-    #[serde(skip)]
-    pub client: Option<Client>,
+    pub config: JsonAuthConfig,
+    pub client: Client,
+}
+
+impl JsonAuthProvider {
+    pub(crate) async fn new(config: JsonAuthConfig) -> Result<Self> {
+        let headers = {
+            let mut map = HeaderMap::new();
+            map.insert(
+                HeaderName::from_str("X-Launcher-API-Key").unwrap(),
+                config.api_key.parse().unwrap(),
+            );
+            map
+        };
+        let client = Client::builder().default_headers(headers).build()?;
+
+        Ok(JsonAuthProvider { config, client })
+    }
 }
 
 #[derive(Deserialize, Serialize)]
@@ -28,25 +38,11 @@ pub struct AuthResult {
 
 #[async_trait]
 impl AuthProvide for JsonAuthProvider {
-    async fn init(&mut self) -> Result<()> {
-        let headers = {
-            let mut map = HeaderMap::new();
-            map.insert(
-                HeaderName::from_str("X-Launcher-API-Key").unwrap(),
-                self.api_key.parse().unwrap(),
-            );
-            map
-        };
-        let client = Client::builder().default_headers(headers).build()?;
-        self.client = Some(client);
-        Ok(())
-    }
-
     async fn auth(&self, login: &str, password: &str, ip: &str) -> Result<Uuid> {
-        let client = self.client.as_ref().unwrap();
+        let client = &self.client;
 
         let result: AuthResult = client
-            .post(&self.auth_url)
+            .post(&self.config.auth_url)
             .json(&serde_json::json!({
                 "username": login,
                 "password": password,
@@ -64,10 +60,10 @@ impl AuthProvide for JsonAuthProvider {
     }
 
     async fn get_entry(&self, uuid: &Uuid) -> Result<Entry> {
-        let client = self.client.as_ref().unwrap();
+        let client = &self.client;
 
         Ok(client
-            .post(&self.entry_url)
+            .post(&self.config.entry_url)
             .json(&serde_json::json!({ "uuid": uuid }))
             .send()
             .await?
@@ -76,10 +72,10 @@ impl AuthProvide for JsonAuthProvider {
     }
 
     async fn get_entry_from_name(&self, username: &str) -> Result<Entry> {
-        let client = self.client.as_ref().unwrap();
+        let client = &self.client;
 
         Ok(client
-            .post(&self.entry_url)
+            .post(&self.config.entry_url)
             .json(&serde_json::json!({ "username": username }))
             .send()
             .await?
@@ -88,10 +84,10 @@ impl AuthProvide for JsonAuthProvider {
     }
 
     async fn update_access_token(&self, uuid: &Uuid, token: &str) -> Result<()> {
-        let client = self.client.as_ref().unwrap();
+        let client = &self.client;
 
         client
-            .post(&self.update_access_token_url)
+            .post(&self.config.update_access_token_url)
             .json(&serde_json::json!({
                 "uuid": uuid,
                 "accessToken": token
@@ -109,16 +105,23 @@ impl AuthProvide for JsonAuthProvider {
     }
 
     async fn update_server_id(&self, uuid: &Uuid, server_id: &str) -> Result<()> {
-        let client = self.client.as_ref().unwrap();
+        let client = &self.client;
 
         client
-            .post(&self.update_server_id_url)
+            .post(&self.config.update_server_id_url)
             .json(&serde_json::json!({
-            "uuid": uuid,
-            "serverId": server_id
+                "uuid": uuid,
+                "serverId": server_id
             }))
             .send()
-            .await?;
-        Ok(())
+            .await
+            .map(|v| {
+                if v.status().is_success() {
+                    Ok(())
+                } else {
+                    Err(anyhow::anyhow!("Bad request, status code: {}", v.status()))
+                }
+            })
+            .unwrap_or_else(|_| Err(anyhow::anyhow!("Can't connect".to_string())))
     }
 }

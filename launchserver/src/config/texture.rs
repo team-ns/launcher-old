@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use strfmt::Format;
 use uuid::Uuid;
 
-use crate::config::auth::Entry;
+use crate::auth::Entry;
 use crate::config::TextureProvider;
 
 impl TextureProvider {

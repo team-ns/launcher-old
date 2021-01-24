@@ -222,7 +222,10 @@ impl Handle for AuthMessage {
         let ip = client.ip.clone();
         send(tx, async {
             let password = server.security.decrypt(&self.password)?;
-            let result = server.config.auth.auth(&self.login, &password, &ip).await?;
+            let result = server
+                .auth_provider
+                .auth(&self.login, &password, &ip)
+                .await?;
             let digest = {
                 let mut rng = rand::thread_rng();
                 md5::compute(format!(
@@ -234,8 +237,7 @@ impl Handle for AuthMessage {
             };
             let access_token = format!("{:x}", digest);
             server
-                .config
-                .auth
+                .auth_provider
                 .update_access_token(&result, &access_token)
                 .await?;
             client.username = Some(self.login.clone());
@@ -259,7 +261,7 @@ impl Handle for JoinServerMessage {
     ) {
         let server = server.read().await;
         send(tx, async {
-            let provide = &server.config.auth;
+            let provide = &server.auth_provider;
             let entry = provide.get_entry(&self.selected_profile).await;
             match entry {
                 Ok(e) => {
