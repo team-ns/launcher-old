@@ -1,3 +1,5 @@
+use futures::future::BoxFuture;
+use futures::FutureExt;
 use launcher_macro::{command, register_commands};
 use log::info;
 use rustyline::completion::{extract_word, Completer};
@@ -9,10 +11,9 @@ use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::process::exit;
 use std::sync::Arc;
-use futures::future::BoxFuture;
-use futures::FutureExt;
 use tokio::sync::RwLock;
 
+use crate::security::SecurityManager;
 use crate::server::profile;
 use crate::LaunchServer;
 
@@ -98,7 +99,7 @@ pub async fn start(server: Arc<RwLock<LaunchServer>>) {
             .build();
         let mut rl: Editor<CommandHelper> = Editor::with_config(rl_config);
         let mut helper = CommandHelper::new(server);
-        register_commands!(rehash, sync);
+        register_commands!(rehash, sync, auth);
         rl.set_helper(Some(helper));
         loop {
             let readline = rl.readline("");
@@ -135,4 +136,33 @@ pub async fn sync(server: &mut LaunchServer, _args: &[&str]) {
     server.profiles = profiles;
     server.profiles_info = profiles_info;
     info!("Sync was successfully finished!");
+}
+
+#[command(description = "Authorize account with provided login and password")]
+pub async fn auth(server: &mut LaunchServer, args: &[&str]) {
+    if args.len() < 2 {
+        info!("Expected correct arguments number. Use auth <login> <password>")
+    } else {
+        match server
+            .auth_provider
+            .auth(args[0], args[1], "127.0.0.1")
+            .await
+        {
+            Ok(uuid) => {
+                let access_token = SecurityManager::create_access_token();
+                match server
+                    .auth_provider
+                    .update_access_token(&uuid, &access_token)
+                    .await
+                {
+                    Ok(_) => info!(
+                        "Success auth: login '{}', uuid '{}', access_token '{}'",
+                        args[0], uuid, access_token
+                    ),
+                    Err(error) => info!("Failed to update access_token: {}", error),
+                }
+            }
+            Err(error) => info!("Failed to auth: {}", error),
+        }
+    }
 }

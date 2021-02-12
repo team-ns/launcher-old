@@ -6,6 +6,7 @@ use launcher_api::validation::{OsType, RemoteDirectory, RemoteFile};
 use log::{error, info};
 use path_slash::{PathBufExt, PathExt};
 use rand::rngs::OsRng;
+use rand::Rng;
 use reqwest::Url;
 use std::collections::hash_map::Values;
 use std::collections::HashMap;
@@ -304,6 +305,19 @@ impl SecurityManager {
             );
         }
         Ok(hashed_jres)
+    }
+
+    pub fn create_access_token() -> String {
+        let digest = {
+            let mut rng = rand::thread_rng();
+            md5::compute(format!(
+                "{}{}{}",
+                rng.gen_range(1000000000, 2147483647),
+                rng.gen_range(1000000000, 2147483647),
+                rng.gen_range(0, 9)
+            ))
+        };
+        format!("{:x}", digest)
     }
 }
 
