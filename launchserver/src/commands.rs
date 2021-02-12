@@ -9,12 +9,14 @@ use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::process::exit;
 use std::sync::Arc;
+use futures::future::BoxFuture;
+use futures::FutureExt;
 use tokio::sync::RwLock;
 
 use crate::server::profile;
 use crate::LaunchServer;
 
-type CmdFn = fn(&mut LaunchServer, &[&str]);
+type CmdFn = for<'a> fn(&'a mut LaunchServer, &'a [&str]) -> BoxFuture<'a, ()>;
 
 struct Command {
     name: &'static str,
@@ -76,7 +78,7 @@ impl CommandHelper {
             Some(&c) => {
                 let args = &args[1..];
                 let mut server = self.server.write().await;
-                (c.func)(server.deref_mut(), args);
+                (c.func)(server.deref_mut(), args).await;
             }
         }
     }
@@ -119,7 +121,7 @@ pub async fn start(server: Arc<RwLock<LaunchServer>>) {
 }
 
 #[command(description = "Update checksum of profile files")]
-pub fn rehash(server: &mut LaunchServer, args: &[&str]) {
+pub async fn rehash(server: &mut LaunchServer, args: &[&str]) {
     server.security.rehash(
         server.profiles.values(),
         args,
@@ -128,7 +130,7 @@ pub fn rehash(server: &mut LaunchServer, args: &[&str]) {
 }
 
 #[command(description = "Sync profile list between server and client")]
-pub fn sync(server: &mut LaunchServer, _args: &[&str]) {
+pub async fn sync(server: &mut LaunchServer, _args: &[&str]) {
     let (profiles, profiles_info) = profile::get_profiles();
     server.profiles = profiles;
     server.profiles_info = profiles_info;
