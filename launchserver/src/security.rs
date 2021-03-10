@@ -17,6 +17,8 @@ use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
 
+use crate::server::profile;
+
 #[derive(PartialEq, Eq, Hash)]
 pub struct NativeVersion {
     pub(crate) version: String,
@@ -153,10 +155,9 @@ impl SecurityManager {
 
         for profile in profiles {
             let mut hashed_profile = RemoteDirectory::new();
-            let black_list = vec!["profile.json", "description.txt"];
 
             let file_iter = get_files_from_dir(format!("static/profiles/{}", profile.name))
-                .filter(|e| !black_list.contains(&e.file_name().to_str().unwrap_or("")));
+                .filter(|e| !profile::BLACK_LIST.contains(&e.file_name().to_str().unwrap_or("")));
             fill_map(file_iter, &mut hashed_profile, file_server.clone())?;
 
             hashed_profiles.insert(profile.name.clone(), hashed_profile);
