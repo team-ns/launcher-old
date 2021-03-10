@@ -26,8 +26,6 @@ const JVM_LIB_PATH: &str = "lib/server/libjvm.dylib";
 pub fn create_jvm(profile: Profile, dir: &str, ram: u64) -> Result<JavaVM> {
     let mut args = InitArgsBuilder::new()
         .option(&format!("-Xmx{}M", ram))
-        .option("-Dfml.ignoreInvalidMinecraftCertificates=true")
-        .option("-Dfml.ignorePatchDiscrepancies=true")
         .option("-XX:+DisableAttachMechanism")
         .option(&profile.get_native_option(dir))
         .option(&profile.create_lib_string(dir))
