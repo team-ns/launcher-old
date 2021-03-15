@@ -3,8 +3,8 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use warp::{Filter, Reply};
 use warp::http::StatusCode;
+use warp::{Filter, Reply};
 
 use crate::server::auth::{has_join, HasJoinRequest};
 use crate::server::websocket::ws_api;
@@ -46,15 +46,16 @@ pub async fn start(data: Arc<RwLock<LaunchServer>>) {
 fn check_black_list(file: warp::filters::fs::File) -> warp::reply::Response {
     let mut iter = file.path().iter().skip(1);
     if let Some(os_str) = iter.next() {
-        if Path::new(os_str).starts_with("profiles")
-            && iter.last().map_or(false, |os_str| {
+        if Path::new(os_str).starts_with("profiles") {
+            let black_list_check = iter.last().map_or(false, |os_str| {
                 let path: &Path = os_str.as_ref();
                 profile::BLACK_LIST
                     .iter()
                     .any(|&file_name| path.ends_with(file_name))
-            })
-        {
-            return StatusCode::NOT_FOUND.into_response();
+            });
+            if black_list_check {
+                return StatusCode::NOT_FOUND.into_response();
+            }
         }
     }
     file.into_response()
