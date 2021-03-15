@@ -1,12 +1,3 @@
-use anyhow::{Context, Result};
-use byteorder::{LittleEndian, ReadBytesExt};
-use ecies_ed25519::SecretKey;
-use launcher_api::profile::Profile;
-use launcher_api::validation::{OsType, RemoteDirectory, RemoteFile};
-use log::{error, info};
-use path_slash::{PathBufExt, PathExt};
-use rand::rngs::OsRng;
-use reqwest::Url;
 use std::collections::hash_map::Values;
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -14,7 +5,19 @@ use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
-use walkdir::{DirEntry, WalkDir};
+
+use anyhow::Result;
+use byteorder::{LittleEndian, ReadBytesExt};
+use ecies_ed25519::SecretKey;
+use log::{error, info};
+use path_slash::PathExt;
+use rand::rngs::OsRng;
+use reqwest::Url;
+use walkdir::DirEntry;
+
+use crate::util::{get_files_from_dir, get_first_level_dirs, strip, strip_folder};
+use launcher_api::profile::Profile;
+use launcher_api::validation::{OsType, RemoteDirectory, RemoteFile};
 
 #[derive(PartialEq, Eq, Hash)]
 pub struct NativeVersion {
@@ -307,14 +310,6 @@ impl SecurityManager {
     }
 }
 
-fn strip_folder(path: &Path, save_number: usize, skip_number: usize) -> String {
-    path.iter()
-        .take(save_number)
-        .chain(path.iter().skip(save_number + skip_number))
-        .collect::<PathBuf>()
-        .to_slash_lossy()
-}
-
 fn fill_map(
     iter: impl Iterator<Item = DirEntry>,
     map: &mut HashMap<PathBuf, RemoteFile>,
@@ -345,34 +340,4 @@ fn create_hashed_dir<P: AsRef<Path>>(path: P, file_server: String) -> Result<Rem
     let iter = get_files_from_dir(path);
     fill_map(iter, &mut directory, file_server)?;
     Ok(directory)
-}
-
-fn get_files_from_dir<P: AsRef<Path>>(path: P) -> impl Iterator<Item = DirEntry> {
-    WalkDir::new(path)
-        .min_depth(1)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.metadata().map(|m| m.is_file()).unwrap_or(false))
-}
-
-fn get_first_level_dirs<P: AsRef<Path>>(path: P) -> impl Iterator<Item = DirEntry> {
-    WalkDir::new(path)
-        .min_depth(1)
-        .max_depth(1)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.metadata().map(|m| m.is_dir()).unwrap_or(false))
-}
-
-fn strip(path: &Path, prefix: &str) -> Result<String> {
-    Ok(path
-        .strip_prefix(prefix)?
-        .to_str()
-        .with_context(|| {
-            format!(
-                "Can't strip prefix for path {:?}, maybe it is have non unicode chars!",
-                path
-            )
-        })?
-        .to_string())
 }
