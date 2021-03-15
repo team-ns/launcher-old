@@ -24,7 +24,6 @@ futures = "0.3"
 anyhow = "1.0.31"
 notify = "5.0.0-pre.2"
 once_cell = "1.5"
-uuid = "0.8"
 log = "0.4"
 bincode = "1.3"
 nfd2 = "0.2"
@@ -32,6 +31,10 @@ t1ha = "0.1.0"
 sysinfo = "0.15"
 obfstr = "0.2"
 lazy-static-include = "3.0.5"
+
+[dependencies.uuid]
+version = "0.8"
+features = ["v4"]
 
 [dependencies.web-view]
 git = "https://github.com/team-ns/web-view"

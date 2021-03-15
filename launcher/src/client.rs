@@ -142,7 +142,7 @@ impl Client {
     }
 
     async fn send_sync(&mut self, msg: ClientMessage) -> ServerMessage {
-        let request_uuid = uuid::Uuid::new_v4();
+        let request_uuid = Uuid::new_v4();
         let request = ClientRequest {
             request_id: request_uuid,
             message: msg,
