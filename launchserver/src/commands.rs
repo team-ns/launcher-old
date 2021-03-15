@@ -1,3 +1,4 @@
+use launcher_extension_api::command::ExtensionCommand;
 use launcher_macro::{command, register_commands};
 use log::info;
 use rustyline::completion::{extract_word, Completer};
@@ -26,6 +27,7 @@ struct Command {
 struct CommandHelper {
     server: Arc<RwLock<LaunchServer>>,
     commands: HashMap<&'static str, &'static Command>,
+    extension_commands: HashMap<String, HashMap<String, ExtensionCommand>>,
 }
 
 impl Completer for CommandHelper {
@@ -55,24 +57,44 @@ impl Completer for CommandHelper {
 }
 
 impl CommandHelper {
-    pub fn new(server: Arc<RwLock<LaunchServer>>) -> Self {
+    pub async fn new(server: Arc<RwLock<LaunchServer>>) -> Self {
+        let server_read = server.read().await;
+        let extension_manager = &server_read.extension_manager;
         CommandHelper {
-            server,
+            server: server.clone(),
             commands: HashMap::new(),
+            extension_commands: extension_manager.get_commands(),
         }
     }
 
     pub async fn eval(&mut self, command: String) {
-        let args: Vec<&str> = command.split(' ').collect();
+        let args: Vec<&str> = command.split(' ').map(str::trim).collect();
         if args[0].eq("help") {
             for command in self.commands.values() {
-                println!("{} - {}", command.name, command.description);
+                println!("[launcher] {} - {}", command.name, command.description);
+            }
+            for (extension, commands) in &self.extension_commands {
+                for (name, command) in commands {
+                    println!("[{}] {} - {}", extension, name, command.description);
+                }
             }
             return;
         }
         let selected_command = self.commands.get(&args[0]);
         match selected_command {
-            None => println!("Command not found. Use help."),
+            None => {
+                let command = self
+                    .extension_commands
+                    .values()
+                    .filter_map(|commands| commands.get(&args[0].to_string()))
+                    .last();
+                if let Some(c) = command {
+                    let args = &args[1..];
+                    c.executor.execute(args);
+                } else {
+                    println!("Command not found. Use help.")
+                }
+            }
             Some(&c) => {
                 let args = &args[1..];
                 let mut server = self.server.write().await;
@@ -95,7 +117,7 @@ pub async fn start(server: Arc<RwLock<LaunchServer>>) {
             .output_stream(OutputStreamType::Stdout)
             .build();
         let mut rl: Editor<CommandHelper> = Editor::with_config(rl_config);
-        let mut helper = CommandHelper::new(server);
+        let mut helper = CommandHelper::new(server).await;
         register_commands!(rehash, sync);
         rl.set_helper(Some(helper));
         loop {

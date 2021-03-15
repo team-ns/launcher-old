@@ -25,13 +25,17 @@ anyhow = "1.0"
 log4rs = "0.13"
 path-slash = "0.1.1"
 tokio-stream = "0.1"
-
+libloading = "0.7"
+dlopen = "0.1"
 
 [dependencies.launcher_api]
 path = "../launcherapi"
 
 [dependencies.launcher_macro]
 path = "../utils-macro"
+
+[dependencies.launcher_extension_api]
+path = "../extensions-api"
 
 [dependencies.serde]
 version = "1.0"
@@ -42,7 +46,7 @@ version = "0.8"
 features = ["serde", "v4"]
 
 [dependencies.tokio]
-version = "1.0"
+version = "1.2"
 features = ["full"]
 
 [dependencies.reqwest]
