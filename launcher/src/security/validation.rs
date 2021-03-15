@@ -1,4 +1,5 @@
 use crate::client::downloader;
+use crate::security;
 use crate::security::watcher::WatcherService;
 use anyhow::Result;
 use launcher_api::message::ProfileResourcesResponse;
@@ -61,7 +62,7 @@ pub async fn validate_profile(
         Ok(())
     })?;
     if let ValidationStatus::NeedUpdate(files_to_update, file_to_remove) =
-        validate(&files, verify, exclude)?
+        validate(&files, verify, exclude)
     {
         debug!("Files to download: {:?}", files_to_update);
         debug!("Files to remove: {:?}", file_to_remove);
@@ -71,7 +72,7 @@ pub async fn validate_profile(
         }
     }
     let watcher = WatcherService::new(profile).expect("Failed to create WatcherService");
-    match validate(&files, verify, exclude)? {
+    match validate(&files, verify, exclude) {
         ValidationStatus::Success => Ok(watcher),
         ValidationStatus::NeedUpdate(files, file_to_remove) => Err(anyhow::anyhow!(
             "Sync error: {:?}",
@@ -93,7 +94,7 @@ fn validate(
     profile: &RemoteDirectory,
     verify: &[String],
     exclude: &[String],
-) -> Result<ValidationStatus> {
+) -> security::validation::ValidationStatus {
     let mut remove_files = Vec::new();
     for dir in verify.iter().map(Path::new).filter(|path| path.is_dir()) {
         for file in walkdir::WalkDir::new(dir)
@@ -118,9 +119,9 @@ fn validate(
         .map(|file| (file.0.to_slash_lossy(), file.1.clone()))
         .collect::<Vec<(String, RemoteFile)>>();
     if profile.is_empty() && remove_files.is_empty() {
-        Ok(ValidationStatus::Success)
+        ValidationStatus::Success
     } else {
-        Ok(ValidationStatus::NeedUpdate(profile, remove_files))
+        ValidationStatus::NeedUpdate(profile, remove_files)
     }
 }
 

@@ -3,9 +3,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use futures::{FutureExt, StreamExt};
 use launcher_api::message::{
-    AuthMessage, AuthResponse, ClientMessage, Error, JoinServerMessage, ProfileMessage,
-    ProfileResourcesMessage, ProfileResourcesResponse, ProfileResponse, ProfilesInfoMessage,
-    ProfilesInfoResponse, ServerMessage,
+    AuthMessage, AuthResponse, ClientMessage, ClientRequest, Error, JoinServerMessage,
+    ProfileMessage, ProfileResourcesMessage, ProfileResourcesResponse, ProfileResponse,
+    ProfilesInfoMessage, ProfilesInfoResponse, ServerMessage, ServerResponse,
 };
 use launcher_api::validation::RemoteDirectory;
 use log::debug;
@@ -21,8 +21,10 @@ use warp::filters::ws::{Message, WebSocket};
 
 use crate::security::NativeVersion;
 use crate::LaunchServer;
+use uuid::Uuid;
 
 pub struct Client {
+    _client_id: Uuid,
     #[allow(unused)] // remove when ready ip limiter
     ip: String,
     access_token: Option<String>,
@@ -32,6 +34,7 @@ pub struct Client {
 impl Client {
     fn new(ip: &str) -> Self {
         Client {
+            _client_id: Uuid::new_v4(),
             ip: ip.to_string(),
             access_token: None,
             username: None,
@@ -43,11 +46,15 @@ pub async fn ws_api(ws: WebSocket, server: Arc<RwLock<LaunchServer>>, ip: String
     let (ws_tx, mut ws_rx) = ws.split();
     let (tx, rx) = mpsc::unbounded_channel();
     let rx = UnboundedReceiverStream::new(rx);
-    tokio::task::spawn(rx.forward(ws_tx).map(|result| {
-        if let Err(e) = result {
-            error!("Websocket send error: {}", e);
-        }
-    }));
+    tokio::task::spawn(
+        rx.map(|server_message| Ok(map_message(server_message)))
+            .forward(ws_tx)
+            .map(|result| {
+                if let Err(e) = result {
+                    error!("Websocket send error: {}", e);
+                }
+            }),
+    );
     let mut client = Client::new(&ip);
     while let Some(result) = ws_rx.next().await {
         let msg = match result {
@@ -59,27 +66,30 @@ pub async fn ws_api(ws: WebSocket, server: Arc<RwLock<LaunchServer>>, ip: String
         };
         if let Ok(json) = msg.to_str() {
             debug!("Client message: {:?}", json.to_string());
-            if let Ok(message) = serde_json::from_str::<ClientMessage>(json) {
-                match message {
+            if let Ok(request) = serde_json::from_str::<ClientRequest>(json) {
+                let request_id = request.request_id;
+                match request.message {
                     ClientMessage::Auth(auth) => {
-                        auth.handle(tx.clone(), server.clone(), &mut client).await;
+                        auth.handle(request_id, tx.clone(), server.clone(), &mut client)
+                            .await;
                     }
                     ClientMessage::JoinServer(join) => {
-                        join.handle(tx.clone(), server.clone(), &mut client).await;
+                        join.handle(request_id, tx.clone(), server.clone(), &mut client)
+                            .await;
                     }
                     ClientMessage::Profile(profile) => {
                         profile
-                            .handle(tx.clone(), server.clone(), &mut client)
+                            .handle(request_id, tx.clone(), server.clone(), &mut client)
                             .await;
                     }
                     ClientMessage::ProfileResources(resources) => {
                         resources
-                            .handle(tx.clone(), server.clone(), &mut client)
+                            .handle(request_id, tx.clone(), server.clone(), &mut client)
                             .await;
                     }
                     ClientMessage::ProfilesInfo(profiles_info) => {
                         profiles_info
-                            .handle(tx.clone(), server.clone(), &mut client)
+                            .handle(request_id, tx.clone(), server.clone(), &mut client)
                             .await;
                     }
                 }
@@ -88,8 +98,13 @@ pub async fn ws_api(ws: WebSocket, server: Arc<RwLock<LaunchServer>>, ip: String
     }
 }
 
+fn map_message(message: ServerResponse) -> Message {
+    Message::text(serde_json::to_string(&message).unwrap())
+}
+
 async fn send(
-    tx: UnboundedSender<Result<Message, warp::Error>>,
+    tx: UnboundedSender<ServerResponse>,
+    request_id: Uuid,
     f: impl Future<Output = Result<ServerMessage>>,
 ) {
     let message = match f.await {
@@ -98,15 +113,19 @@ async fn send(
             msg: format!("{}", e),
         }),
     };
-    tx.send(Ok(Message::text(serde_json::to_string(&message).unwrap())))
-        .expect("Can't send message to client");
+    let response = ServerResponse {
+        request_id: Some(request_id),
+        message,
+    };
+    tx.send(response).expect("Can't send message to client");
 }
 
 #[async_trait::async_trait]
 pub trait Handle {
     async fn handle(
         &self,
-        tx: UnboundedSender<Result<Message, warp::Error>>,
+        request_id: Uuid,
+        tx: UnboundedSender<ServerResponse>,
         server: Arc<RwLock<LaunchServer>>,
         client: &mut Client,
     );
@@ -135,12 +154,13 @@ where
 impl Handle for ProfileResourcesMessage {
     async fn handle(
         &self,
-        tx: UnboundedSender<Result<Message, warp::Error>>,
+        request_id: Uuid,
+        tx: UnboundedSender<ServerResponse>,
         server: Arc<RwLock<LaunchServer>>,
         _client: &mut Client,
     ) {
         let server = &*server.read().await;
-        send(tx, async {
+        send(tx, request_id, async {
             match server.profiles.get(&self.profile) {
                 Some(profile) => {
                     let libraries = get_resource(&server.security.libraries, &self.profile)?;
@@ -174,12 +194,13 @@ impl Handle for ProfileResourcesMessage {
 impl Handle for ProfileMessage {
     async fn handle(
         &self,
-        tx: UnboundedSender<Result<Message, warp::Error>>,
+        request_id: Uuid,
+        tx: UnboundedSender<ServerResponse>,
         server: Arc<RwLock<LaunchServer>>,
         _client: &mut Client,
     ) {
         let server = server.read().await;
-        send(tx, async {
+        send(tx, request_id, async {
             match server.profiles.get(&self.profile) {
                 Some(profile) => Ok(ServerMessage::Profile(ProfileResponse {
                     profile: profile.to_owned(),
@@ -195,12 +216,13 @@ impl Handle for ProfileMessage {
 impl Handle for ProfilesInfoMessage {
     async fn handle(
         &self,
-        tx: UnboundedSender<Result<Message, warp::Error>>,
+        request_id: Uuid,
+        tx: UnboundedSender<ServerResponse>,
         server: Arc<RwLock<LaunchServer>>,
         _client: &mut Client,
     ) {
         let server = server.read().await;
-        send(tx, async {
+        send(tx, request_id, async {
             Ok(ServerMessage::ProfilesInfo(ProfilesInfoResponse {
                 profiles_info: server.profiles_info.clone(),
             }))
@@ -213,14 +235,15 @@ impl Handle for ProfilesInfoMessage {
 impl Handle for AuthMessage {
     async fn handle(
         &self,
-        tx: UnboundedSender<Result<Message, warp::Error>>,
+        request_id: Uuid,
+        tx: UnboundedSender<ServerResponse>,
         server: Arc<RwLock<LaunchServer>>,
         client: &mut Client,
     ) {
         let server = server.read().await;
         //TODO ADD IP FOR LIMITERS
         let ip = client.ip.clone();
-        send(tx, async {
+        send(tx, request_id, async {
             let password = server.security.decrypt(&self.password)?;
             let result = server
                 .auth_provider
@@ -255,12 +278,13 @@ impl Handle for AuthMessage {
 impl Handle for JoinServerMessage {
     async fn handle(
         &self,
-        tx: UnboundedSender<Result<Message, warp::Error>>,
+        request_id: Uuid,
+        tx: UnboundedSender<ServerResponse>,
         server: Arc<RwLock<LaunchServer>>,
         _client: &mut Client,
     ) {
         let server = server.read().await;
-        send(tx, async {
+        send(tx, request_id, async {
             let provide = &server.auth_provider;
             let entry = provide.get_entry(&self.selected_profile).await;
             match entry {

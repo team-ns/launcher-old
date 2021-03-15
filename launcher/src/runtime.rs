@@ -37,8 +37,9 @@ macro_rules! handle_error {
 
 pub async fn start() {
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let (runtime_message_tx, mut runtime_message_rx) = tokio::sync::mpsc::unbounded_channel();
     let message_handle = tokio::task::spawn(async move {
-        message_loop(rx).await;
+        message_loop(rx, runtime_message_tx).await;
     });
     let ui_handle = tokio::task::spawn_blocking(move || {
         let webview = web_view::builder()
@@ -51,12 +52,28 @@ pub async fn start() {
             .invoke_handler(move |view, arg| invoke_handler(view, arg, tx.clone()))
             .build()
             .expect("Can't create webview runtime");
+        let handle = webview.handle();
+        tokio::spawn(async move {
+            loop {
+                match runtime_message_rx.recv().await {
+                    None => break,
+                    Some(message) => {
+                        handle
+                            .dispatch(move |wv| {
+                                wv.eval(&format!(
+                                    r#"app.backend.customMessage('{}')"#,
+                                    message.replace(r#"""#, r#"""#)
+                                ))?;
+                                Ok(())
+                            })
+                            .expect("Can't eval message request");
+                    }
+                }
+            }
+        });
         webview.run().expect("Can't run webview runtime");
     });
     ui_handle.await.expect("Can't execute ui loop");
-    if PLAYING.get().is_none() {
-        std::process::exit(0);
-    }
     message_handle.await.expect("Can't execute message loop");
 }
 
@@ -75,7 +92,10 @@ fn invoke_handler(
     Ok(())
 }
 
-async fn message_loop(mut recv: UnboundedReceiver<(RuntimeMessage, Handle<()>)>) {
+async fn message_loop(
+    mut recv: UnboundedReceiver<(RuntimeMessage, Handle<()>)>,
+    sender: UnboundedSender<String>,
+) {
     loop {
         match recv.recv().await {
             None => {
@@ -105,7 +125,10 @@ async fn message_loop(mut recv: UnboundedReceiver<(RuntimeMessage, Handle<()>)>)
                         )
                     }
                     RuntimeMessage::Ready => {
-                        handle_error!(error_handler, messages::ready(handler).await)
+                        handle_error!(
+                            error_handler,
+                            messages::ready(handler, sender.clone()).await
+                        )
                     }
                     RuntimeMessage::SelectGameDir => {
                         handle_error!(error_handler, messages::select_game_dir(handler).await)

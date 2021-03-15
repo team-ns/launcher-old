@@ -20,6 +20,7 @@ use path_slash::PathBufExt;
 use notify::EventKind;
 use std::{env, fs};
 use sysinfo::SystemExt;
+use tokio::sync::mpsc::UnboundedSender;
 use web_view::Handle;
 
 #[derive(Serialize, Deserialize)]
@@ -64,8 +65,8 @@ pub async fn login_user(
     Ok(())
 }
 
-pub async fn ready(handler: Handle<()>) -> Result<()> {
-    match Client::new().await {
+pub async fn ready(handler: Handle<()>, sender: UnboundedSender<String>) -> Result<()> {
+    match Client::new(sender).await {
         Ok(c) => {
             CLIENT
                 .set(Arc::new(Mutex::new(c)))
@@ -200,7 +201,7 @@ pub async fn start_client(
     let game_handle = tokio::task::spawn_blocking(move || {
         if let Some(info) = auth_info {
             handler.dispatch(|w| {
-                w.exit();
+                w.set_visible(false);
                 Ok(())
             })?;
             game::start(jvm, profile, info, &game_dir)?;
