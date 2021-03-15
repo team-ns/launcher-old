@@ -19,6 +19,9 @@ use crate::util::{get_files_from_dir, get_first_level_dirs, strip, strip_folder}
 use launcher_api::profile::Profile;
 use launcher_api::validation::{OsType, RemoteDirectory, RemoteFile};
 
+use crate::server::profile;
+use rand::Rng;
+
 #[derive(PartialEq, Eq, Hash)]
 pub struct NativeVersion {
     pub(crate) version: String,
@@ -155,10 +158,9 @@ impl SecurityManager {
 
         for profile in profiles {
             let mut hashed_profile = RemoteDirectory::new();
-            let black_list = vec!["profile.json", "description.txt"];
 
             let file_iter = get_files_from_dir(format!("static/profiles/{}", profile.name))
-                .filter(|e| !black_list.contains(&e.file_name().to_str().unwrap_or("")));
+                .filter(|e| !profile::BLACK_LIST.contains(&e.file_name().to_str().unwrap_or("")));
             fill_map(file_iter, &mut hashed_profile, file_server.clone())?;
 
             hashed_profiles.insert(profile.name.clone(), hashed_profile);
@@ -307,6 +309,19 @@ impl SecurityManager {
             );
         }
         Ok(hashed_jres)
+    }
+
+    pub fn create_access_token() -> String {
+        let digest = {
+            let mut rng = rand::thread_rng();
+            md5::compute(format!(
+                "{}{}{}",
+                rng.gen_range(1000000000, 2147483647),
+                rng.gen_range(1000000000, 2147483647),
+                rng.gen_range(0, 9)
+            ))
+        };
+        format!("{:x}", digest)
     }
 }
 

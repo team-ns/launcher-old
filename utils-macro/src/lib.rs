@@ -10,6 +10,9 @@ use args::{Args, Command};
 pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AttributeArgs);
     let item_fn = parse_macro_input!(item as ItemFn);
+    if item_fn.sig.asyncness.is_none() {
+        panic!("Function should be async!");
+    }
     let func_ident = &item_fn.sig.ident;
     let (name, description) = {
         if args.len() == 1 {
@@ -27,13 +30,18 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
     let varname = Command::get_varname(func_ident);
+    let block = item_fn.block;
     TokenStream::from(quote! {
         static #varname: Command = Command {
             name: #name,
             description: #description,
             func: #func_ident,
         };
-        #item_fn
+        pub fn #func_ident<'a>(server: &'a mut LaunchServer, args: &'a [&str]) -> BoxFuture<'a, ()> {
+            async move
+                #block
+            .boxed()
+        }
     })
 }
 

@@ -4,6 +4,8 @@ use std::fs;
 use std::fs::File;
 use walkdir::WalkDir;
 
+pub static BLACK_LIST: [&str; 2] = ["profile.json", "description.txt"];
+
 pub fn get_profiles() -> (HashMap<String, Profile>, Vec<ProfileInfo>) {
     let profiles: HashMap<String, Profile> = WalkDir::new("static/profiles")
         .min_depth(2)

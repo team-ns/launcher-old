@@ -10,7 +10,6 @@ use launcher_api::message::{
 use launcher_api::validation::RemoteDirectory;
 use log::debug;
 use log::error;
-use rand::Rng;
 use std::collections::HashMap;
 use std::hash::Hash;
 use tokio::macros::support::Future;
@@ -19,7 +18,7 @@ use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use warp::filters::ws::{Message, WebSocket};
 
-use crate::security::NativeVersion;
+use crate::security::{NativeVersion, SecurityManager};
 use crate::LaunchServer;
 use uuid::Uuid;
 
@@ -249,16 +248,7 @@ impl Handle for AuthMessage {
                 .auth_provider
                 .auth(&self.login, &password, &ip)
                 .await?;
-            let digest = {
-                let mut rng = rand::thread_rng();
-                md5::compute(format!(
-                    "{}{}{}",
-                    rng.gen_range(1000000000, 2147483647),
-                    rng.gen_range(1000000000, 2147483647),
-                    rng.gen_range(0, 9)
-                ))
-            };
-            let access_token = format!("{:x}", digest);
+            let access_token = SecurityManager::create_access_token();
             server
                 .auth_provider
                 .update_access_token(&result, &access_token)
