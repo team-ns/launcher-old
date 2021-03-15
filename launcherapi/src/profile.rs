@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
     pub name: String,
@@ -18,7 +18,7 @@ pub struct Profile {
     pub server_port: u32,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ProfileInfo {
     pub name: String,
     pub version: String,

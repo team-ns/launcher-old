@@ -2,13 +2,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct HashedFile {
     pub size: u64,
     pub checksum: u128,
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct RemoteFile {
     pub uri: String,
     pub size: u64,
@@ -23,7 +23,7 @@ impl PartialEq<RemoteFile> for HashedFile {
 
 pub type RemoteDirectory = HashMap<PathBuf, RemoteFile>;
 
-#[derive(Deserialize, Serialize, PartialEq, Eq, Hash, Clone)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash, Clone)]
 pub enum OsType {
     LinuxX64,
     LinuxX32,
