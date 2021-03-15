@@ -1,0 +1,11 @@
+[package]
+name = "launcher_extension_api"
+version = "0.0.1"
+authors = ["RussianJeb", "Belz"]
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0"
+tokio = { version = "1.2", features = ["sync"] }
+launcher_api = { path = "../launcherapi" }
+uuid = { version = "0.8" }

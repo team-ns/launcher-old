@@ -3,7 +3,8 @@ members = [
     "launcher",
     "launchserver",
     "launcherapi",
-    "utils-macro"
+    "utils-macro",
+    "extensions-api"
 ]
 
 [profile.release]
