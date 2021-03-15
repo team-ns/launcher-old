@@ -120,7 +120,7 @@ pub async fn start(server: Arc<RwLock<LaunchServer>>) {
             .output_stream(OutputStreamType::Stdout)
             .build();
         let mut rl: Editor<CommandHelper> = Editor::with_config(rl_config);
-        let mut helper = CommandHelper::new(server);
+        let mut helper = CommandHelper::new(server).await;
         register_commands!(rehash, sync, auth);
         rl.set_helper(Some(helper));
         loop {
