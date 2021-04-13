@@ -165,12 +165,13 @@ pub async fn start_client(
     profile: String,
 ) -> Result<()> {
     let mut client = socket.lock().await;
-    let resources = client.get_resources(&profile).await?;
+    let optionals = SETTINGS.get().expect("Can't get settings").lock().await.get_optionals(&profile);
+    let resources = client.get_resources(&profile, optionals.clone()).await?;
     let remote_directory = validation::new_remote_directory(resources);
     let settings = SETTINGS.get().expect("Can't get settings").lock().await;
     let game_dir = settings.game_dir.clone();
     let ram = settings.ram;
-    let profile = client.get_profile(&profile).await?.profile;
+    let profile = client.get_profile(&profile, optionals).await?.profile;
     let watcher =
         validation::validate_profile(&profile, &remote_directory, handler.clone()).await?;
     let auth_info = client.auth_info.clone();
