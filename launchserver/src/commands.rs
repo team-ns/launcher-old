@@ -124,7 +124,7 @@ pub async fn start(server: Arc<RwLock<LaunchServer>>) {
 #[command(description = "Update checksum of profile files")]
 pub async fn rehash(server: &mut LaunchServer, args: &[&str]) {
     server.security.rehash(
-        server.profiles.values(),
+        server.profiles_data.values().map(|data| &data.profile),
         args,
         server.config.file_server.clone(),
     );
@@ -132,9 +132,7 @@ pub async fn rehash(server: &mut LaunchServer, args: &[&str]) {
 
 #[command(description = "Sync profile list between server and client")]
 pub async fn sync(server: &mut LaunchServer, _args: &[&str]) {
-    let (profiles, profiles_info) = profile::get_profiles();
-    server.profiles = profiles;
-    server.profiles_info = profiles_info;
+    server.profiles_data = profile::get_profiles_data();
     info!("Sync was successfully finished!");
 }
 

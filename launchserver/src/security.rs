@@ -8,7 +8,6 @@ use path_slash::{PathBufExt, PathExt};
 use rand::rngs::OsRng;
 use rand::Rng;
 use reqwest::Url;
-use std::collections::hash_map::Values;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};
@@ -21,8 +20,8 @@ use crate::server::profile;
 
 #[derive(PartialEq, Eq, Hash)]
 pub struct NativeVersion {
-    pub(crate) version: String,
-    pub(crate) os_type: OsType,
+    pub version: String,
+    pub os_type: OsType,
 }
 
 pub struct SecurityManager {
@@ -117,9 +116,9 @@ impl SecurityManager {
         Ok(())
     }
 
-    pub fn rehash(
+    pub fn rehash<'a, I: Clone + Iterator<Item = &'a Profile>>(
         &mut self,
-        profiles: Values<String, Profile>,
+        profiles: I,
         args: &[&str],
         file_server: String,
     ) {
@@ -147,8 +146,8 @@ impl SecurityManager {
         info!("Rehash was successfully finished!");
     }
 
-    fn hash_profiles(
-        profiles: Values<String, Profile>,
+    fn hash_profiles<'a, I: Clone + Iterator<Item = &'a Profile>>(
+        profiles: I,
         file_server: String,
     ) -> Result<HashMap<String, RemoteDirectory>> {
         let mut hashed_profiles = HashMap::new();
@@ -165,8 +164,8 @@ impl SecurityManager {
         Ok(hashed_profiles)
     }
 
-    fn hash_libraries(
-        profiles: Values<String, Profile>,
+    fn hash_libraries<'a, I: Clone + Iterator<Item = &'a Profile>>(
+        profiles: I,
         file_server: String,
     ) -> Result<HashMap<String, RemoteDirectory>> {
         let mut libs = HashMap::new();
