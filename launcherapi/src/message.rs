@@ -40,11 +40,13 @@ pub struct JoinServerMessage {
 pub struct ProfileResourcesMessage {
     pub profile: String,
     pub os_type: OsType,
+    pub optionals: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct ProfileMessage {
     pub profile: String,
+    pub optionals: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize)]
