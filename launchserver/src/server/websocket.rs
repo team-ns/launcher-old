@@ -7,7 +7,7 @@ use launcher_api::message::{
     ProfileResourcesMessage, ProfileResourcesResponse, ProfileResponse, ProfilesInfoMessage,
     ProfilesInfoResponse, ServerMessage,
 };
-use launcher_api::validation::RemoteDirectory;
+use launcher_api::validation::{ClientInfo, RemoteDirectory, RemoteDirectoryExt};
 use log::debug;
 use log::error;
 use std::collections::HashMap;
@@ -21,11 +21,15 @@ use warp::filters::ws::{Message, WebSocket};
 use crate::security::{NativeVersion, SecurityManager};
 use crate::LaunchServer;
 
+use launcher_api::optional::{Location, Optional};
+use launcher_api::profile::ProfileInfo;
+
 pub struct Client {
     #[allow(unused)] // remove when ready ip limiter
     ip: String,
     access_token: Option<String>,
     username: Option<String>,
+    client_info: Option<ClientInfo>,
 }
 
 impl Client {
@@ -34,6 +38,7 @@ impl Client {
             ip: ip.to_string(),
             access_token: None,
             username: None,
+            client_info: None,
         }
     }
 }
@@ -136,23 +141,35 @@ impl Handle for ProfileResourcesMessage {
         &self,
         tx: UnboundedSender<Result<Message, warp::Error>>,
         server: Arc<RwLock<LaunchServer>>,
-        _client: &mut Client,
+        client: &mut Client,
     ) {
         let server = &*server.read().await;
         send(tx, async {
-            match server.profiles.get(&self.profile) {
-                Some(profile) => {
-                    let libraries = get_resource(&server.security.libraries, &self.profile)?;
-                    let assets = get_resource(&server.security.assets, &profile.assets)?;
+            match server.profiles_data.get(&self.profile) {
+                Some(profile_data) => {
+                    let info = client.client_info.as_ref().unwrap();
+                    let files = profile_data
+                        .profile_info
+                        .get_irrelevant_optionals(info, &self.optionals)
+                        .map(Optional::get_files)
+                        .flatten()
+                        .collect::<HashMap<_, _>>();
+                    let libraries = get_resource(&server.security.libraries, &self.profile)?
+                        .filter_files(files.get(&Location::Libraries));
+                    let assets =
+                        get_resource(&server.security.assets, &profile_data.profile.assets)?
+                            .filter_files(files.get(&Location::Assets));
+
                     let natives = get_resource(
                         &server.security.natives,
                         &NativeVersion {
-                            version: profile.version.clone(),
+                            version: profile_data.profile.version.clone(),
                             os_type: self.os_type.clone(),
                         },
                     )?;
                     let jre = get_resource(&server.security.jres, &self.os_type)?;
-                    let profile = get_resource(&server.security.profiles, &self.profile)?;
+                    let profile = get_resource(&server.security.profiles, &self.profile)?
+                        .filter_files(files.get(&Location::Profile));
 
                     Ok(ServerMessage::ProfileResources(ProfileResourcesResponse {
                         profile,
@@ -175,14 +192,23 @@ impl Handle for ProfileMessage {
         &self,
         tx: UnboundedSender<Result<Message, warp::Error>>,
         server: Arc<RwLock<LaunchServer>>,
-        _client: &mut Client,
+        client: &mut Client,
     ) {
         let server = server.read().await;
         send(tx, async {
-            match server.profiles.get(&self.profile) {
-                Some(profile) => Ok(ServerMessage::Profile(ProfileResponse {
-                    profile: profile.to_owned(),
-                })),
+            match server.profiles_data.get(&self.profile) {
+                Some(profile_data) => {
+                    let info = client.client_info.as_ref().unwrap();
+                    let args = profile_data
+                        .profile_info
+                        .get_relevant_optionals(info, &self.optionals)
+                        .map(Optional::get_args)
+                        .flatten()
+                        .collect::<Vec<_>>();
+                    let mut profile = profile_data.profile.to_owned();
+                    profile.jvm_args.extend(args);
+                    Ok(ServerMessage::Profile(ProfileResponse { profile }))
+                }
                 None => Err(anyhow::anyhow!("This profile doesn't exist!")),
             }
         })
@@ -196,12 +222,22 @@ impl Handle for ProfilesInfoMessage {
         &self,
         tx: UnboundedSender<Result<Message, warp::Error>>,
         server: Arc<RwLock<LaunchServer>>,
-        _client: &mut Client,
+        client: &mut Client,
     ) {
         let server = server.read().await;
+        let info = client.client_info.as_ref().unwrap();
+        let profiles_info: Vec<ProfileInfo> = server
+            .profiles_data
+            .values()
+            .map(|data| {
+                let mut data = data.profile_info.clone();
+                data.retain_visible_optionals(info);
+                data
+            })
+            .collect();
         send(tx, async {
             Ok(ServerMessage::ProfilesInfo(ProfilesInfoResponse {
-                profiles_info: server.profiles_info.clone(),
+                profiles_info,
             }))
         })
         .await;

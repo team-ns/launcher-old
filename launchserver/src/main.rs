@@ -1,5 +1,5 @@
 use launcher_api::config::Configurable;
-use launcher_api::profile::{Profile, ProfileInfo};
+use launcher_api::profile::ProfileData;
 use log::info;
 use server::profile;
 use std::collections::HashMap;
@@ -22,8 +22,7 @@ mod server;
 pub struct LaunchServer {
     pub config: Config,
     pub security: SecurityManager,
-    pub profiles: HashMap<String, Profile>,
-    pub profiles_info: Vec<ProfileInfo>,
+    pub profiles_data: HashMap<String, ProfileData>,
     pub auth_provider: AuthProvider,
 }
 
@@ -34,9 +33,13 @@ impl LaunchServer {
         info!("Read config file...");
         let config = Config::get_config(Path::new("config.json")).expect("Can't read config file!");
         info!("Launch server starting...");
-        let (profiles, profiles_info) = profile::get_profiles();
         let mut security = SecurityManager::default();
-        security.rehash(profiles.values(), &[], config.file_server.clone());
+        let profiles_data = profile::get_profiles_data();
+        security.rehash(
+            profiles_data.values().map(|data| &data.profile),
+            &[],
+            config.file_server.clone(),
+        );
         let auth_provider = config
             .auth
             .get_provider()
@@ -46,8 +49,7 @@ impl LaunchServer {
         LaunchServer {
             config,
             security,
-            profiles,
-            profiles_info,
+            profiles_data,
             auth_provider,
         }
     }

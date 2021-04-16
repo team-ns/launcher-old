@@ -1,3 +1,4 @@
+use crate::optional::OptionalFiles;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -23,6 +24,26 @@ impl PartialEq<RemoteFile> for HashedFile {
 
 pub type RemoteDirectory = HashMap<PathBuf, RemoteFile>;
 
+pub trait RemoteDirectoryExt {
+    fn filter_files(self, files: Option<&OptionalFiles>) -> Self;
+}
+
+impl RemoteDirectoryExt for RemoteDirectory {
+    fn filter_files(mut self, files: Option<&OptionalFiles>) -> Self {
+        if let Some(files) = files {
+            for path in &files.original_paths {
+                self.remove(&PathBuf::from(path));
+            }
+            for path in &files.rename_paths {
+                if let Some(file) = self.remove(&PathBuf::from(path.0)) {
+                    self.insert(PathBuf::from(path.1), file);
+                }
+            }
+        }
+        self
+    }
+}
+
 #[derive(Deserialize, Serialize, PartialEq, Eq, Hash, Clone)]
 pub enum OsType {
     LinuxX64,
@@ -30,4 +51,8 @@ pub enum OsType {
     MacOSX64,
     WindowsX64,
     WindowsX32,
+}
+
+pub struct ClientInfo {
+    pub os_type: OsType,
 }

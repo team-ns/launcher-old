@@ -81,10 +81,11 @@ impl Client {
         }
     }
 
-    pub async fn get_resources(&mut self, profile: &str) -> Result<ProfileResourcesResponse> {
+    pub async fn get_resources(&mut self, profile: &str, optionals: Vec<String>) -> Result<ProfileResourcesResponse> {
         let message = ClientMessage::ProfileResources(ProfileResourcesMessage {
             profile: String::from(profile),
             os_type: get_os_type(),
+            optionals,
         });
         match self.send_sync(message).await {
             ServerMessage::ProfileResources(profile) => Ok(profile),
@@ -102,9 +103,10 @@ impl Client {
         }
     }
 
-    pub async fn get_profile(&mut self, profile: &str) -> Result<ProfileResponse> {
+    pub async fn get_profile(&mut self, profile: &str, optionals: Vec<String>) -> Result<ProfileResponse> {
         let message = ClientMessage::Profile(ProfileMessage {
             profile: String::from(profile),
+            optionals,
         });
         match self.send_sync(message).await {
             ServerMessage::Profile(profile) => Ok(profile),
