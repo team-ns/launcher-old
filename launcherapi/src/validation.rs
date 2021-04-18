@@ -44,7 +44,7 @@ impl RemoteDirectoryExt for RemoteDirectory {
     }
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Eq, Hash, Clone)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash, Clone)]
 pub enum OsType {
     LinuxX64,
     LinuxX32,

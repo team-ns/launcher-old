@@ -2,7 +2,7 @@ use crate::optional::Optional;
 use crate::validation::ClientInfo;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
     pub name: String,
@@ -20,7 +20,7 @@ pub struct Profile {
     pub server_port: u32,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct ProfileInfo {
     pub name: String,
     pub version: String,
@@ -36,7 +36,7 @@ impl ProfileInfo {
     pub fn get_relevant_optionals<'a>(
         &'a self,
         client_info: &'a ClientInfo,
-        selected: &'a Vec<String>,
+        selected: &'a [String],
     ) -> impl Iterator<Item = &'a Optional> {
         self.get_optionals_by_filter(move |optional| optional.relevant(client_info, selected))
     }
@@ -44,7 +44,7 @@ impl ProfileInfo {
     pub fn get_irrelevant_optionals<'a>(
         &'a self,
         client_info: &'a ClientInfo,
-        selected: &'a Vec<String>,
+        selected: &'a [String],
     ) -> impl Iterator<Item = &'a Optional> {
         self.get_optionals_by_filter(move |optional| !optional.relevant(client_info, selected))
     }

@@ -3,14 +3,14 @@ use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum Action {
     Files(FileAction),
     Args(Vec<String>),
 }
 
-#[derive(Default, Serialize, Deserialize, Clone)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct OptionalFiles {
     #[serde(default)]
     pub original_paths: Vec<String>,
@@ -18,13 +18,13 @@ pub struct OptionalFiles {
     pub rename_paths: HashMap<String, String>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FileAction {
     location: Location,
     files: OptionalFiles,
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum Location {
     Profile,
@@ -32,13 +32,13 @@ pub enum Location {
     Assets,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum Rule {
     OsType(OsRule),
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct OsRule {
     os_type: OsType,
@@ -46,7 +46,7 @@ pub struct OsRule {
     compare_mode: CompareMode,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum CompareMode {
     Equal,
@@ -72,7 +72,7 @@ impl Apply for OsRule {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Optional {
     actions: Vec<Action>,
     rules: Vec<Rule>,
@@ -108,7 +108,7 @@ impl Optional {
         self.visible && self.apply(client_info)
     }
 
-    pub fn relevant(&self, client_info: &ClientInfo, selected: &Vec<String>) -> bool {
+    pub fn relevant(&self, client_info: &ClientInfo, selected: &[String]) -> bool {
         self.apply(client_info) && (!self.visible || selected.contains(self.name.as_ref().unwrap()))
     }
 
@@ -120,7 +120,7 @@ impl Optional {
         }) {
             let entry = map
                 .entry(&action.location)
-                .or_insert(OptionalFiles::default());
+                .or_insert_with(OptionalFiles::default);
             entry
                 .original_paths
                 .append(&mut action.files.original_paths.clone());
