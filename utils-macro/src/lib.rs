@@ -37,7 +37,7 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
             description: #description,
             func: #func_ident,
         };
-        pub fn #func_ident<'a>(server: &'a mut LaunchServer, args: &'a [&str]) -> BoxFuture<'a, ()> {
+        pub fn #func_ident<'a>(sp: Arc<LauncherServiceProvider>, args: &'a [&str]) -> BoxFuture<'a, ()> {
             async move
                 #block
             .boxed()

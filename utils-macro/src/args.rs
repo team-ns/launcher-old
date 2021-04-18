@@ -28,7 +28,7 @@ pub fn get_string_value(meta: &NestedMeta, key: &str) -> String {
     let expect_msg = format!("Expected argument `{} = \"...\"`", key);
     let argument_name_and_value = match meta {
         NestedMeta::Meta(Meta::NameValue(meta)) => meta,
-        _ => panic!(expect_msg),
+        _ => panic!("{}", expect_msg),
     };
     assert_eq!(
         argument_name_and_value
