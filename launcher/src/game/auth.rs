@@ -25,13 +25,13 @@ pub static CHANNEL_SEND: AuthSendChannel = Lazy::new(|| {
 
 #[no_mangle]
 #[allow(non_snake_case)]
-pub(crate) extern "system" fn Java_com_mojang_authlib_yggdrasil_launcherJoinRequest(
+pub extern "system" fn Java_com_mojang_authlib_yggdrasil_launcherJoinRequest(
     env: JNIEnv,
     _object: JObject,
     request: JObject,
 ) {
-    struct JNI<'a>(JNIEnv<'a>, JObject<'a>);
-    impl<'a> JNI<'a> {
+    struct Jni<'a>(JNIEnv<'a>, JObject<'a>);
+    impl<'a> Jni<'a> {
         fn get_field(&self, name: &'a str, ty: &'a str) -> Result<JObject<'a>, jni::errors::Error> {
             self.0.get_field(self.1, name, ty).and_then(|v| v.l())
         }
@@ -55,7 +55,7 @@ pub(crate) extern "system" fn Java_com_mojang_authlib_yggdrasil_launcherJoinRequ
         }
     }
 
-    let jni = JNI(env, request);
+    let jni = Jni(env, request);
     let profile: Uuid = {
         let result = jni.to_string(jni.get_field("selectedProfile", "Ljava/util/UUID;"));
         Uuid::from_str(&jni.get_string(result)).expect("Can't parse game profile unique id")

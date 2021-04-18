@@ -67,7 +67,7 @@ impl Settings {
         self.optionals
             .get(profile)
             .map(Clone::clone)
-            .unwrap_or(vec![])
+            .unwrap_or_default()
     }
 }
 

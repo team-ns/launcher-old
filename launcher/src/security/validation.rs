@@ -61,7 +61,7 @@ pub async fn validate_profile(
         Ok(())
     })?;
     if let ValidationStatus::NeedUpdate(files_to_update, file_to_remove) =
-        validate(&files, verify, exclude)?
+        validate(&files, verify, exclude)
     {
         debug!("Files to download: {:?}", files_to_update);
         debug!("Files to remove: {:?}", file_to_remove);
@@ -71,7 +71,7 @@ pub async fn validate_profile(
         }
     }
     let watcher = WatcherService::new(profile).expect("Failed to create WatcherService");
-    match validate(&files, verify, exclude)? {
+    match validate(&files, verify, exclude) {
         ValidationStatus::Success => Ok(watcher),
         ValidationStatus::NeedUpdate(files, file_to_remove) => Err(anyhow::anyhow!(
             "Sync error: {:?}",
@@ -89,11 +89,7 @@ pub async fn validate_profile(
     }
 }
 
-fn validate(
-    profile: &RemoteDirectory,
-    verify: &[String],
-    exclude: &[String],
-) -> Result<ValidationStatus> {
+fn validate(profile: &RemoteDirectory, verify: &[String], exclude: &[String]) -> ValidationStatus {
     let mut remove_files = Vec::new();
     for dir in verify.iter().map(Path::new).filter(|path| path.is_dir()) {
         for file in walkdir::WalkDir::new(dir)
@@ -118,15 +114,15 @@ fn validate(
         .map(|file| (file.0.to_slash_lossy(), file.1.clone()))
         .collect::<Vec<(String, RemoteFile)>>();
     if profile.is_empty() && remove_files.is_empty() {
-        Ok(ValidationStatus::Success)
+        ValidationStatus::Success
     } else {
-        Ok(ValidationStatus::NeedUpdate(profile, remove_files))
+        ValidationStatus::NeedUpdate(profile, remove_files)
     }
 }
 
 pub fn get_os_type() -> OsType {
     #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-    let os_type = OsType::MacOSX64;
+    let os_type = OsType::MacOsX64;
     #[cfg(all(target_os = "linux"))]
     let os_type = {
         let info = uname::uname().expect("Can't get os info");

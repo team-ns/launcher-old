@@ -48,7 +48,7 @@ impl RemoteDirectoryExt for RemoteDirectory {
 pub enum OsType {
     LinuxX64,
     LinuxX32,
-    MacOSX64,
+    MacOsX64,
     WindowsX64,
     WindowsX32,
 }

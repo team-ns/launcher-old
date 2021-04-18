@@ -33,16 +33,16 @@ pub struct TextureProvider {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum AuthConfig {
-    JSON(JsonAuthConfig),
-    SQL(SqlAuthConfig),
+    Json(JsonAuthConfig),
+    Sql(SqlAuthConfig),
     Accept,
 }
 
 impl AuthConfig {
     pub fn get_provider(&self) -> Result<AuthProvider> {
         let provider = match self {
-            AuthConfig::JSON(config) => AuthProvider::Json(JsonAuthProvider::new(config.clone())?),
-            AuthConfig::SQL(config) => AuthProvider::Sql(SqlAuthProvider::new(config.clone())?),
+            AuthConfig::Json(config) => AuthProvider::Json(JsonAuthProvider::new(config.clone())?),
+            AuthConfig::Sql(config) => AuthProvider::Sql(SqlAuthProvider::new(config.clone())?),
             AuthConfig::Accept => AuthProvider::Accept(AcceptAuthProvider::default()),
         };
         Ok(provider)

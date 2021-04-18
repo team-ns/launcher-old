@@ -180,7 +180,7 @@ impl HashingService {
             let mut hashed_native: HashMap<OsType, RemoteDirectory> = [
                 (OsType::LinuxX64, RemoteDirectory::new()),
                 (OsType::LinuxX32, RemoteDirectory::new()),
-                (OsType::MacOSX64, RemoteDirectory::new()),
+                (OsType::MacOsX64, RemoteDirectory::new()),
                 (OsType::WindowsX64, RemoteDirectory::new()),
                 (OsType::WindowsX32, RemoteDirectory::new()),
             ]
@@ -217,7 +217,7 @@ impl HashingService {
                             os_type = Some(OsType::LinuxX64);
                         }
                     } else if extension.eq("dylib") || extension.eq("jnilib") {
-                        os_type = Some(OsType::MacOSX64);
+                        os_type = Some(OsType::MacOsX64);
                     } else {
                         error!("Found excess file: {:?} in native dir!", path);
                         continue;
@@ -255,7 +255,7 @@ impl HashingService {
         let jres = vec![
             (OsType::LinuxX64, "LinuxX64"),
             (OsType::LinuxX32, "LinuxX32"),
-            (OsType::MacOSX64, "MacOSX64"),
+            (OsType::MacOsX64, "MacOSX64"),
             (OsType::WindowsX64, "WindowsX64"),
             (OsType::WindowsX32, "WindowsX32"),
         ];
