@@ -11,6 +11,25 @@ use walkdir::{DirEntry, WalkDir};
 
 pub static BLACK_LIST: [&str; 2] = ["profile.json", "description.txt"];
 
+pub struct ProfileService {
+    pub profiles_data: HashMap<String, ProfileData>,
+}
+
+#[teloc::inject]
+impl ProfileService {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for ProfileService {
+    fn default() -> Self {
+        Self {
+            profiles_data: get_profiles_data(),
+        }
+    }
+}
+
 pub fn get_profiles_data() -> HashMap<String, ProfileData> {
     let mut profiles_data = HashMap::new();
 

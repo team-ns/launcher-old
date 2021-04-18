@@ -165,7 +165,12 @@ pub async fn start_client(
     profile: String,
 ) -> Result<()> {
     let mut client = socket.lock().await;
-    let optionals = SETTINGS.get().expect("Can't get settings").lock().await.get_optionals(&profile);
+    let optionals = SETTINGS
+        .get()
+        .expect("Can't get settings")
+        .lock()
+        .await
+        .get_optionals(&profile);
     let resources = client.get_resources(&profile, optionals.clone()).await?;
     let remote_directory = validation::new_remote_directory(resources);
     let settings = SETTINGS.get().expect("Can't get settings").lock().await;

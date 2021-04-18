@@ -81,7 +81,11 @@ impl Client {
         }
     }
 
-    pub async fn get_resources(&mut self, profile: &str, optionals: Vec<String>) -> Result<ProfileResourcesResponse> {
+    pub async fn get_resources(
+        &mut self,
+        profile: &str,
+        optionals: Vec<String>,
+    ) -> Result<ProfileResourcesResponse> {
         let message = ClientMessage::ProfileResources(ProfileResourcesMessage {
             profile: String::from(profile),
             os_type: get_os_type(),
@@ -103,7 +107,11 @@ impl Client {
         }
     }
 
-    pub async fn get_profile(&mut self, profile: &str, optionals: Vec<String>) -> Result<ProfileResponse> {
+    pub async fn get_profile(
+        &mut self,
+        profile: &str,
+        optionals: Vec<String>,
+    ) -> Result<ProfileResponse> {
         let message = ClientMessage::Profile(ProfileMessage {
             profile: String::from(profile),
             optionals,

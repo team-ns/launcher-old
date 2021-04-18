@@ -3,11 +3,11 @@ use launcher_api::config::Configurable;
 use once_cell::sync::{Lazy, OnceCell};
 use path_slash::PathExt;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::io::Write;
 use std::sync::Arc;
 use std::{fs, path};
 use tokio::sync::Mutex;
-use std::collections::HashMap;
 
 pub static CONFIG: Lazy<Config> = Lazy::new(Config::default);
 
@@ -40,7 +40,7 @@ pub struct Settings {
     pub ram: u64,
     pub saved_password: Option<String>,
     pub last_name: Option<String>,
-    pub optionals: HashMap<String, Vec<String>>
+    pub optionals: HashMap<String, Vec<String>>,
 }
 
 impl Settings {
@@ -64,7 +64,10 @@ impl Settings {
     }
 
     pub fn get_optionals(&self, profile: &str) -> Vec<String> {
-        self.optionals.get(profile).map(Clone::clone).unwrap_or(vec![])
+        self.optionals
+            .get(profile)
+            .map(Clone::clone)
+            .unwrap_or(vec![])
     }
 }
 
@@ -76,7 +79,7 @@ impl Default for Settings {
             ram: CONFIG.ram,
             saved_password: None,
             last_name: None,
-            optionals: Default::default()
+            optionals: Default::default(),
         }
     }
 }
