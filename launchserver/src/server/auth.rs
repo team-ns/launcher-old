@@ -1,20 +1,13 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::LaunchServer;
-use serde_json::Value;
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use warp::http::StatusCode;
-use warp::Reply;
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct JoinRequest {
-    access_token: String,
-    server_id: String,
-    selected_profile: Uuid,
-}
+use crate::auth::AuthProvider;
+use crate::config::Config;
+use crate::LauncherServiceProvider;
+use ntex::web;
+use ntex::web::types::Json;
+use ntex::web::{HttpRequest, HttpResponse};
+use teloc::Resolver;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,40 +16,32 @@ pub struct HasJoinRequest {
     server_id: String,
 }
 
-pub(crate) async fn has_join(
-    request: HasJoinRequest,
-    data: Arc<RwLock<LaunchServer>>,
-) -> Result<impl Reply, warp::Rejection> {
-    let server = data.read().await;
-    let texture = &server.config.texture;
-    let auth = &server.auth_provider;
-    let entry = auth.get_entry_from_name(&request.username).await;
+pub async fn has_join(
+    body: Json<HasJoinRequest>,
+    _req: HttpRequest,
+    sp: web::types::Data<LauncherServiceProvider>,
+) -> HttpResponse {
+    let config: &Config = sp.resolve();
+    let texture = &config.texture;
+    let auth: &AuthProvider = sp.resolve();
+    let entry = auth.get_entry_from_name(&body.username).await;
     match entry {
-        Err(_e) => Ok(warp::reply::with_status(
-            warp::reply::json(&Value::default()),
-            StatusCode::BAD_REQUEST,
-        )),
+        Err(_e) => HttpResponse::BadRequest().finish(),
         Ok(e) => {
-            if e.server_id.is_some() && e.server_id.clone().unwrap().eq(&request.server_id) {
+            if e.server_id.is_some() && e.server_id.clone().unwrap().eq(&body.server_id) {
                 let texture = base64::encode(&texture.get_textures_property(&e).to_string());
-                Ok(warp::reply::with_status(
-                    warp::reply::json(&serde_json::json!({
-                        "id":  e.uuid.to_simple().encode_lower(&mut Uuid::encode_buffer()),
-                        "name": request.username,
-                        "properties": [
-                            {
-                                "name": "textures",
-                                "value": texture
-                            }
-                        ]
-                    })),
-                    StatusCode::OK,
-                ))
+                HttpResponse::Ok().json(&serde_json::json!({
+                    "id":  e.uuid.to_simple().encode_lower(&mut Uuid::encode_buffer()),
+                    "name": body.username,
+                    "properties": [
+                        {
+                            "name": "textures",
+                            "value": texture
+                        }
+                    ]
+                }))
             } else {
-                Ok(warp::reply::with_status(
-                    warp::reply::json(&Value::default()),
-                    StatusCode::BAD_REQUEST,
-                ))
+                HttpResponse::BadRequest().finish()
             }
         }
     }

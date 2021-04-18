@@ -8,16 +8,17 @@ use rustyline::Config as LineConfig;
 use rustyline::{CompletionType, Context, EditMode, Editor, OutputStreamType};
 use rustyline_derive::{Helper, Highlighter, Hinter, Validator};
 use std::collections::HashMap;
-use std::ops::DerefMut;
 use std::process::exit;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::security::SecurityManager;
-use crate::server::profile;
-use crate::LaunchServer;
+use crate::auth::AuthProvider;
+use crate::profile::ProfileService;
+use crate::security::SecurityService;
+use crate::{hash, profile, LauncherServiceProvider};
+use teloc::Resolver;
 
-type CmdFn = for<'a> fn(&'a mut LaunchServer, &'a [&str]) -> BoxFuture<'a, ()>;
+type CmdFn = for<'a> fn(Arc<LauncherServiceProvider>, &'a [&str]) -> BoxFuture<'a, ()>;
 
 struct Command {
     name: &'static str,
@@ -27,7 +28,7 @@ struct Command {
 
 #[derive(Hinter, Helper, Validator, Highlighter)]
 struct CommandHelper {
-    server: Arc<RwLock<LaunchServer>>,
+    service_provider: Arc<LauncherServiceProvider>,
     commands: HashMap<&'static str, &'static Command>,
 }
 
@@ -58,9 +59,9 @@ impl Completer for CommandHelper {
 }
 
 impl CommandHelper {
-    pub fn new(server: Arc<RwLock<LaunchServer>>) -> Self {
+    pub fn new(service_provider: Arc<LauncherServiceProvider>) -> Self {
         CommandHelper {
-            server,
+            service_provider,
             commands: HashMap::new(),
         }
     }
@@ -78,8 +79,7 @@ impl CommandHelper {
             None => println!("Command not found. Use help."),
             Some(&c) => {
                 let args = &args[1..];
-                let mut server = self.server.write().await;
-                (c.func)(server.deref_mut(), args).await;
+                (c.func)(self.service_provider.clone(), args).await;
             }
         }
     }
@@ -89,7 +89,7 @@ impl CommandHelper {
     }
 }
 
-pub async fn start(server: Arc<RwLock<LaunchServer>>) {
+pub async fn run(server: Arc<LauncherServiceProvider>) {
     tokio::spawn(async move {
         let rl_config = LineConfig::builder()
             .history_ignore_space(true)
@@ -122,34 +122,28 @@ pub async fn start(server: Arc<RwLock<LaunchServer>>) {
 }
 
 #[command(description = "Update checksum of profile files")]
-pub async fn rehash(server: &mut LaunchServer, args: &[&str]) {
-    server.security.rehash(
-        server.profiles_data.values().map(|data| &data.profile),
-        args,
-        server.config.file_server.clone(),
-    );
+pub async fn rehash(sp: Arc<LauncherServiceProvider>, args: &[&str]) {
+    hash::rehash(sp, args).await;
 }
 
 #[command(description = "Sync profile list between server and client")]
-pub async fn sync(server: &mut LaunchServer, _args: &[&str]) {
-    server.profiles_data = profile::get_profiles_data();
+pub async fn sync(sp: Arc<LauncherServiceProvider>, _args: &[&str]) {
+    let profile_service: Arc<RwLock<ProfileService>> = sp.resolve();
+    let mut profile_service = profile_service.write().await;
+    profile_service.profiles_data = profile::get_profiles_data();
     info!("Sync was successfully finished!");
 }
 
 #[command(description = "Authorize account with provided login and password")]
-pub async fn auth(server: &mut LaunchServer, args: &[&str]) {
+pub async fn auth(sp: Arc<LauncherServiceProvider>, args: &[&str]) {
     if args.len() < 2 {
         info!("Expected correct arguments number. Use auth <login> <password>")
     } else {
-        match server
-            .auth_provider
-            .auth(args[0], args[1], "127.0.0.1")
-            .await
-        {
+        let auth_provider: &AuthProvider = sp.resolve();
+        match auth_provider.auth(args[0], args[1], "127.0.0.1").await {
             Ok(uuid) => {
-                let access_token = SecurityManager::create_access_token();
-                match server
-                    .auth_provider
+                let access_token = SecurityService::create_access_token();
+                match auth_provider
                     .update_access_token(&uuid, &access_token)
                     .await
                 {

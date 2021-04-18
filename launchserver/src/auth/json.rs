@@ -2,12 +2,11 @@ use crate::auth::{AuthProvide, Entry};
 use crate::config::auth::JsonAuthConfig;
 use anyhow::Result;
 use async_trait::async_trait;
+use reqwest::header::{HeaderMap, HeaderName};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use uuid::Uuid;
-use warp::http::HeaderMap;
-use warp::hyper::header::HeaderName;
 
 pub struct JsonAuthProvider {
     pub config: JsonAuthConfig,
@@ -15,7 +14,7 @@ pub struct JsonAuthProvider {
 }
 
 impl JsonAuthProvider {
-    pub(crate) async fn new(config: JsonAuthConfig) -> Result<Self> {
+    pub fn new(config: JsonAuthConfig) -> Result<Self> {
         let headers = {
             let mut map = HeaderMap::new();
             map.insert(

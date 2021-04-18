@@ -13,8 +13,8 @@ pub struct SqlAuthProvider {
 }
 
 impl SqlAuthProvider {
-    pub async fn new(config: SqlAuthConfig) -> Result<Self> {
-        let pool = AnyPool::connect(&config.connection_url).await?;
+    pub fn new(config: SqlAuthConfig) -> Result<Self> {
+        let pool = AnyPool::connect_lazy(&config.connection_url)?;
         Ok(SqlAuthProvider { config, pool })
     }
 }

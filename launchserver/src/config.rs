@@ -8,6 +8,7 @@ use crate::auth::json::JsonAuthProvider;
 use crate::auth::sql::SqlAuthProvider;
 use crate::auth::AuthProvider;
 use std::clone::Clone;
+use std::path::Path;
 
 pub(crate) mod auth;
 mod texture;
@@ -38,17 +39,21 @@ pub enum AuthConfig {
 }
 
 impl AuthConfig {
-    pub(crate) async fn get_provider(&self) -> Result<AuthProvider> {
+    pub fn get_provider(&self) -> Result<AuthProvider> {
         let provider = match self {
-            AuthConfig::JSON(config) => {
-                AuthProvider::JSON(JsonAuthProvider::new(config.clone()).await?)
-            }
-            AuthConfig::SQL(config) => {
-                AuthProvider::SQL(SqlAuthProvider::new(config.clone()).await?)
-            }
+            AuthConfig::JSON(config) => AuthProvider::Json(JsonAuthProvider::new(config.clone())?),
+            AuthConfig::SQL(config) => AuthProvider::Sql(SqlAuthProvider::new(config.clone())?),
             AuthConfig::Accept => AuthProvider::Accept(AcceptAuthProvider::default()),
         };
         Ok(provider)
+    }
+}
+
+#[teloc::inject]
+impl Config {
+    pub fn new() -> Self {
+        log::info!("Read config file");
+        Self::get_config(Path::new("config.json")).expect("Can't read config file!")
     }
 }
 
