@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::server::auth::has_join;
+use crate::server::http::has_join;
 use crate::server::websocket::ws_api;
 use crate::LauncherServiceProvider;
 use anyhow::Result;
@@ -8,7 +8,7 @@ use ntex::web::middleware;
 use ntex::web::types::Data;
 use teloc::Resolver;
 
-mod auth;
+mod http;
 mod websocket;
 
 pub async fn run(data: Data<LauncherServiceProvider>) -> Result<()> {
@@ -22,6 +22,7 @@ pub async fn run(data: Data<LauncherServiceProvider>) -> Result<()> {
             .service(ntex_files::Files::new("/files", "static"))
             .service(web::resource("/hasJoined").route(web::get().to(has_join)))
     })
+    .workers(config.workers)
     .bind(&config.bind_address)?
     .run()
     .await?;

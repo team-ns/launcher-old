@@ -13,8 +13,10 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::auth::AuthProvider;
+use crate::extensions::ExtensionService;
 use crate::profile::ProfileService;
 use crate::{hash, profile, LauncherServiceProvider};
+use launcher_extension_api::command::ExtensionCommand;
 use teloc::Resolver;
 
 type CmdFn = for<'a> fn(Arc<LauncherServiceProvider>, &'a [&str]) -> BoxFuture<'a, ()>;
@@ -29,6 +31,7 @@ struct Command {
 struct CommandHelper {
     service_provider: Arc<LauncherServiceProvider>,
     commands: HashMap<&'static str, &'static Command>,
+    extension_commands: HashMap<String, HashMap<String, ExtensionCommand>>,
 }
 
 impl Completer for CommandHelper {
@@ -59,26 +62,50 @@ impl Completer for CommandHelper {
 
 impl CommandHelper {
     pub fn new(service_provider: Arc<LauncherServiceProvider>) -> Self {
+        let extension_sp = service_provider.clone();
+        let extension_service: &ExtensionService = extension_sp.resolve();
         CommandHelper {
             service_provider,
             commands: HashMap::new(),
+            extension_commands: extension_service.get_commands(),
         }
     }
 
     pub async fn eval(&mut self, command: String) {
         let args: Vec<&str> = command.split(' ').collect();
         if args[0].eq("help") {
-            for command in self.commands.values() {
-                println!("{} - {}", command.name, command.description);
-            }
+            self.show_help();
             return;
         }
         let selected_command = self.commands.get(&args[0]);
         match selected_command {
-            None => println!("Command not found. Use help."),
+            None => {
+                let command = self
+                    .extension_commands
+                    .values()
+                    .filter_map(|commands| commands.get(&args[0].to_string()))
+                    .last();
+                if let Some(c) = command {
+                    let args = &args[1..];
+                    c.executor.execute(args);
+                } else {
+                    info!("Command not found. Use help.")
+                }
+            }
             Some(&c) => {
                 let args = &args[1..];
                 (c.func)(self.service_provider.clone(), args).await;
+            }
+        }
+    }
+
+    pub fn show_help(&self) {
+        for command in self.commands.values() {
+            info!("[launcher] {} - {}", command.name, command.description);
+        }
+        for (extension, commands) in &self.extension_commands {
+            for (name, command) in commands {
+                info!("[{}] {} - {}", extension, name, command.description);
             }
         }
     }

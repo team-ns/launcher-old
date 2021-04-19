@@ -22,6 +22,7 @@ pub struct Config {
     pub file_server: String,
     pub websocket_url: String,
     pub project_name: String,
+    pub workers: usize,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -71,6 +72,7 @@ impl Default for Config {
             },
             websocket_url: "ws://127.0.0.1:8080".to_string(),
             project_name: "NSL".to_string(),
+            workers: 4,
         }
     }
 }

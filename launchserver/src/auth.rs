@@ -8,9 +8,9 @@ use crate::config::Config;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub(crate) mod accept;
-pub(crate) mod json;
-pub(crate) mod sql;
+pub mod accept;
+pub mod json;
+pub mod sql;
 
 pub enum AuthProvider {
     Json(JsonAuthProvider),

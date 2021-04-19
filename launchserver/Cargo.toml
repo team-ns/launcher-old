@@ -26,9 +26,13 @@ ntex = "0.3"
 ntex-files = { git = "https://github.com/team-ns/ntex-extras" }
 teloc = { git = "https://github.com/team-ns/teloc" }
 bincode = "1.3"
+dlopen = "0.1"
 
 [dependencies.launcher_api]
 path = "../launcherapi"
+
+[dependencies.launcher_extension_api]
+path = "../extensions-api"
 
 [dependencies.launcher_macro]
 path = "../utils-macro"

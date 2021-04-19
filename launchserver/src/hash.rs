@@ -1,23 +1,26 @@
-use crate::config::Config;
-use crate::profile::ProfileService;
-use crate::{profile, LauncherServiceProvider};
-use anyhow::{Context, Result};
-use byteorder::{LittleEndian, ReadBytesExt};
-use launcher_api::profile::Profile;
-use launcher_api::validation::{OsType, RemoteDirectory, RemoteFile};
-use log::{error, info};
-use path_slash::{PathBufExt, PathExt};
-use reqwest::Url;
 use std::collections::HashMap;
-use std::ffi::OsStr;
 use std::fs::File;
 use std::io::prelude::*;
-use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+
+use anyhow::Result;
+use log::{error, info};
+use path_slash::PathExt;
+use reqwest::Url;
 use teloc::Resolver;
 use tokio::sync::RwLock;
-use walkdir::{DirEntry, WalkDir};
+use walkdir::DirEntry;
+
+use launcher_api::profile::Profile;
+use launcher_api::validation::{OsType, RemoteDirectory, RemoteFile};
+
+use crate::config::Config;
+use crate::profile::ProfileService;
+use crate::util;
+use crate::{profile, LauncherServiceProvider};
+
+mod arch;
 
 #[derive(PartialEq, Eq, Hash)]
 pub struct NativeVersion {
@@ -117,8 +120,10 @@ impl HashingService {
         for profile in profiles {
             let mut hashed_profile = RemoteDirectory::new();
 
-            let file_iter = get_files_from_dir(format!("static/profiles/{}", profile.name))
-                .filter(|e| !profile::BLACK_LIST.contains(&e.file_name().to_str().unwrap_or("")));
+            let file_iter =
+                util::fs::get_files_from_dir(format!("static/profiles/{}", profile.name)).filter(
+                    |e| !profile::BLACK_LIST.contains(&e.file_name().to_str().unwrap_or("")),
+                );
             fill_map(file_iter, &mut hashed_profile, file_server.clone())?;
 
             hashed_profiles.insert(profile.name.clone(), hashed_profile);
@@ -131,7 +136,7 @@ impl HashingService {
         file_server: String,
     ) -> Result<HashMap<String, RemoteDirectory>> {
         let mut libs = HashMap::new();
-        for file in get_files_from_dir("static/libraries") {
+        for file in util::fs::get_files_from_dir("static/libraries") {
             libs.insert(
                 file.path().strip_prefix("static/")?.to_owned(),
                 create_remote_file(file.path(), file_server.clone())?,
@@ -163,10 +168,10 @@ impl HashingService {
     fn hash_assets(file_server: String) -> Result<HashMap<String, RemoteDirectory>> {
         let mut hashed_assets = HashMap::new();
 
-        for version in get_first_level_dirs("static/assets") {
+        for version in util::fs::get_first_level_dirs("static/assets") {
             let path = version.path();
             hashed_assets.insert(
-                strip(path, "static/assets/")?,
+                util::fs::strip(path, "static/assets/")?,
                 create_hashed_dir(path, file_server.clone())?,
             );
         }
@@ -176,67 +181,27 @@ impl HashingService {
     fn hash_natives(file_server: String) -> Result<HashMap<NativeVersion, RemoteDirectory>> {
         let mut hashed_natives: HashMap<NativeVersion, RemoteDirectory> = HashMap::new();
 
-        for version in get_first_level_dirs("static/natives") {
-            let mut hashed_native: HashMap<OsType, RemoteDirectory> = [
-                (OsType::LinuxX64, RemoteDirectory::new()),
-                (OsType::LinuxX32, RemoteDirectory::new()),
-                (OsType::MacOsX64, RemoteDirectory::new()),
-                (OsType::WindowsX64, RemoteDirectory::new()),
-                (OsType::WindowsX32, RemoteDirectory::new()),
-            ]
-            .iter()
-            .cloned()
-            .collect();
+        for version in util::fs::get_first_level_dirs("static/natives") {
+            let mut hashed_native = HashMap::new();
 
             let version_path = version.path();
-            for file in get_files_from_dir(version_path) {
+            for file in util::fs::get_files_from_dir(version_path) {
                 let path = file.path();
-
-                let extension = path.extension().and_then(OsStr::to_str);
-                if let Some(extension) = extension {
-                    let mut os_type = None;
-                    if extension.eq("dll") {
-                        let mut file = File::open(path)?;
-                        file.seek(SeekFrom::Start(0x3C))?;
-                        let pe_header = file.read_u32::<LittleEndian>()?;
-                        file.seek(SeekFrom::Start((pe_header + 4) as u64))?;
-                        let arch = file.read_u16::<LittleEndian>()?;
-
-                        if arch == 0x014c {
-                            os_type = Some(OsType::WindowsX32);
-                        } else if arch == 0x8664 {
-                            os_type = Some(OsType::WindowsX64);
-                        }
-                    } else if extension.eq("so") {
-                        let mut file = File::open(path)?;
-                        file.seek(SeekFrom::Start(4))?;
-                        let arch = file.read_u8()?;
-                        if arch == 1 {
-                            os_type = Some(OsType::LinuxX32);
-                        } else if arch == 2 {
-                            os_type = Some(OsType::LinuxX64);
-                        }
-                    } else if extension.eq("dylib") || extension.eq("jnilib") {
-                        os_type = Some(OsType::MacOsX64);
-                    } else {
-                        error!("Found excess file: {:?} in native dir!", path);
-                        continue;
-                    }
-                    match os_type {
-                        Some(os_type) => {
-                            hashed_native.get_mut(&os_type).unwrap().insert(
-                                PathBuf::from(strip(path, "static/")?),
+                match arch::get_os_type(path) {
+                    Ok(os_type) => {
+                        hashed_native
+                            .entry(os_type)
+                            .or_insert_with(RemoteDirectory::default)
+                            .insert(
+                                PathBuf::from(util::fs::strip(path, "static/")?),
                                 create_remote_file(path, file_server.clone())?,
                             );
-                        }
-                        None => error!("Unknown file archetype: {:?}!", path),
                     }
-                } else {
-                    error!("Cannot get file: {:?} extension!", path);
+                    Err(error) => error!("{:?}", error),
                 }
             }
 
-            let version = strip(version_path, "static/natives/")?;
+            let version = util::fs::strip(version_path, "static/natives/")?;
 
             for native in hashed_native {
                 let native_version = NativeVersion {
@@ -270,14 +235,6 @@ impl HashingService {
     }
 }
 
-fn strip_folder(path: &Path, save_number: usize, skip_number: usize) -> String {
-    path.iter()
-        .take(save_number)
-        .chain(path.iter().skip(save_number + skip_number))
-        .collect::<PathBuf>()
-        .to_slash_lossy()
-}
-
 fn fill_map(
     iter: impl Iterator<Item = DirEntry>,
     map: &mut HashMap<PathBuf, RemoteFile>,
@@ -286,14 +243,14 @@ fn fill_map(
     for file in iter {
         let path = file.path();
         let strip_path = if path.starts_with("static/jre") {
-            strip_folder(
+            util::fs::strip_folder(
                 path.strip_prefix("static/")
                     .expect("Failed to strip prefix!"),
                 1,
                 1,
             )
         } else {
-            strip(path, "static/")?
+            util::fs::strip(path, "static/")?
         };
         map.insert(
             PathBuf::from(strip_path),
@@ -305,39 +262,9 @@ fn fill_map(
 
 fn create_hashed_dir<P: AsRef<Path>>(path: P, file_server: String) -> Result<RemoteDirectory> {
     let mut directory = RemoteDirectory::new();
-    let iter = get_files_from_dir(path);
+    let iter = util::fs::get_files_from_dir(path);
     fill_map(iter, &mut directory, file_server)?;
     Ok(directory)
-}
-
-fn get_files_from_dir<P: AsRef<Path>>(path: P) -> impl Iterator<Item = DirEntry> {
-    WalkDir::new(path)
-        .min_depth(1)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.metadata().map(|m| m.is_file()).unwrap_or(false))
-}
-
-fn get_first_level_dirs<P: AsRef<Path>>(path: P) -> impl Iterator<Item = DirEntry> {
-    WalkDir::new(path)
-        .min_depth(1)
-        .max_depth(1)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.metadata().map(|m| m.is_dir()).unwrap_or(false))
-}
-
-fn strip(path: &Path, prefix: &str) -> Result<String> {
-    Ok(path
-        .strip_prefix(prefix)?
-        .to_str()
-        .with_context(|| {
-            format!(
-                "Can't strip prefix for path {:?}, maybe it is have non unicode chars!",
-                path
-            )
-        })?
-        .to_string())
 }
 
 pub async fn rehash(sp: Arc<LauncherServiceProvider>, args: &[&str]) {
