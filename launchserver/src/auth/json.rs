@@ -1,9 +1,10 @@
-use crate::auth::{AuthProvide, Entry};
+use crate::auth::{AuthProvide, AuthResult, Entry};
 use crate::config::auth::JsonAuthConfig;
-use anyhow::Result;
+use crate::security::SecurityService;
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use reqwest::header::{HeaderMap, HeaderName};
-use reqwest::Client;
+use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use uuid::Uuid;
@@ -27,20 +28,35 @@ impl JsonAuthProvider {
 
         Ok(JsonAuthProvider { config, client })
     }
+
+    async fn update_access_token(&self, uuid: &Uuid, token: &str) -> Result<()> {
+        let client = &self.client;
+
+        client
+            .post(&self.config.update_access_token_url)
+            .json(&serde_json::json!({
+                "uuid": uuid,
+                "accessToken": token
+            }))
+            .send()
+            .await
+            .map(map_request)
+            .unwrap_or_else(|_| Err(anyhow::anyhow!("Can't connect".to_string())))
+    }
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct AuthResult {
+pub struct JsonAuthResult {
     pub uuid: Option<Uuid>,
     pub message: Option<String>,
 }
 
 #[async_trait]
 impl AuthProvide for JsonAuthProvider {
-    async fn auth(&self, login: &str, password: &str, ip: &str) -> Result<Uuid> {
+    async fn auth(&self, login: &str, password: &str, ip: &str) -> Result<AuthResult> {
         let client = &self.client;
 
-        let result: AuthResult = client
+        let result: JsonAuthResult = client
             .post(&self.config.auth_url)
             .json(&serde_json::json!({
                 "username": login,
@@ -51,8 +67,12 @@ impl AuthProvide for JsonAuthProvider {
             .await?
             .json()
             .await?;
+
         if result.message.is_none() {
-            Ok(result.uuid.unwrap())
+            let uuid = result.uuid.context("Can't find UUID in auth response")?;
+            let access_token = SecurityService::create_access_token();
+            self.update_access_token(&uuid, &access_token).await?;
+            Ok(AuthResult { uuid, access_token })
         } else {
             Err(anyhow::anyhow!("{}", result.message.unwrap()))
         }
@@ -82,27 +102,6 @@ impl AuthProvide for JsonAuthProvider {
             .await?)
     }
 
-    async fn update_access_token(&self, uuid: &Uuid, token: &str) -> Result<()> {
-        let client = &self.client;
-
-        client
-            .post(&self.config.update_access_token_url)
-            .json(&serde_json::json!({
-                "uuid": uuid,
-                "accessToken": token
-            }))
-            .send()
-            .await
-            .map(|v| {
-                if v.status().is_success() {
-                    Ok(())
-                } else {
-                    Err(anyhow::anyhow!("Bad request, status code: {}", v.status()))
-                }
-            })
-            .unwrap_or_else(|_| Err(anyhow::anyhow!("Can't connect".to_string())))
-    }
-
     async fn update_server_id(&self, uuid: &Uuid, server_id: &str) -> Result<()> {
         let client = &self.client;
 
@@ -114,13 +113,18 @@ impl AuthProvide for JsonAuthProvider {
             }))
             .send()
             .await
-            .map(|v| {
-                if v.status().is_success() {
-                    Ok(())
-                } else {
-                    Err(anyhow::anyhow!("Bad request, status code: {}", v.status()))
-                }
-            })
+            .map(map_request)
             .unwrap_or_else(|_| Err(anyhow::anyhow!("Can't connect".to_string())))
+    }
+}
+
+fn map_request(response: Response) -> Result<()> {
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "Bad request, status code: {}",
+            response.status()
+        ))
     }
 }

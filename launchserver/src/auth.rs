@@ -38,17 +38,22 @@ pub struct Entry {
     pub username: String,
 }
 
+#[derive(Deserialize, Serialize, Clone)]
+pub struct AuthResult {
+    pub access_token: String,
+    pub uuid: Uuid,
+}
+
 #[async_trait]
 pub trait AuthProvide {
-    async fn auth(&self, login: &str, password: &str, ip: &str) -> Result<Uuid>;
+    async fn auth(&self, login: &str, password: &str, ip: &str) -> Result<AuthResult>;
     async fn get_entry(&self, uuid: &Uuid) -> Result<Entry>;
     async fn get_entry_from_name(&self, username: &str) -> Result<Entry>;
-    async fn update_access_token(&self, uuid: &Uuid, token: &str) -> Result<()>;
     async fn update_server_id(&self, uuid: &Uuid, server_id: &str) -> Result<()>;
 }
 
 impl AuthProvider {
-    pub async fn auth(&self, login: &str, password: &str, ip: &str) -> Result<Uuid> {
+    pub async fn auth(&self, login: &str, password: &str, ip: &str) -> Result<AuthResult> {
         match self {
             AuthProvider::Accept(accept) => accept.auth(login, password, ip).await,
             AuthProvider::Json(json) => json.auth(login, password, ip).await,
@@ -68,13 +73,6 @@ impl AuthProvider {
             AuthProvider::Accept(accept) => accept.get_entry_from_name(username).await,
             AuthProvider::Json(json) => json.get_entry_from_name(username).await,
             AuthProvider::Sql(sql) => sql.get_entry_from_name(username).await,
-        }
-    }
-    pub async fn update_access_token(&self, uuid: &Uuid, token: &str) -> Result<()> {
-        match self {
-            AuthProvider::Accept(accept) => accept.update_access_token(uuid, token).await,
-            AuthProvider::Json(json) => json.update_access_token(uuid, token).await,
-            AuthProvider::Sql(sql) => sql.update_access_token(uuid, token).await,
         }
     }
     pub async fn update_server_id(&self, uuid: &Uuid, server_id: &str) -> Result<()> {

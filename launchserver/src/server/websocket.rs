@@ -279,15 +279,13 @@ impl MessageHandle for AuthMessage {
         let ip = client.ip.clone();
         let password = security_service.decrypt(&self.password)?;
         let result = auth_provider.auth(&self.login, &password, &ip).await?;
-        let access_token = SecurityService::create_access_token();
-        auth_provider
-            .update_access_token(&result, &access_token)
-            .await?;
+        let access_token = result.access_token;
+        let uuid = result.uuid;
         client.username = Some(self.login.clone());
         client.access_token = Some(access_token.clone());
         Ok(ServerMessage::Auth(AuthResponse {
-            uuid: result.to_string(),
-            access_token: access_token.to_string(),
+            uuid: uuid.to_string(),
+            access_token,
         }))
     }
 }

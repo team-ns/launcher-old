@@ -14,7 +14,6 @@ use tokio::sync::RwLock;
 
 use crate::auth::AuthProvider;
 use crate::profile::ProfileService;
-use crate::security::SecurityService;
 use crate::{hash, profile, LauncherServiceProvider};
 use teloc::Resolver;
 
@@ -141,18 +140,11 @@ pub async fn auth(sp: Arc<LauncherServiceProvider>, args: &[&str]) {
     } else {
         let auth_provider: &AuthProvider = sp.resolve();
         match auth_provider.auth(args[0], args[1], "127.0.0.1").await {
-            Ok(uuid) => {
-                let access_token = SecurityService::create_access_token();
-                match auth_provider
-                    .update_access_token(&uuid, &access_token)
-                    .await
-                {
-                    Ok(_) => info!(
-                        "Success auth: login '{}', uuid '{}', access_token '{}'",
-                        args[0], uuid, access_token
-                    ),
-                    Err(error) => info!("Failed to update access_token: {}", error),
-                }
+            Ok(result) => {
+                info!(
+                    "Success auth: login '{}', uuid '{}', access_token '{}'",
+                    args[0], result.uuid, result.access_token
+                )
             }
             Err(error) => info!("Failed to auth: {}", error),
         }
