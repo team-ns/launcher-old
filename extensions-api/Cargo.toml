@@ -10,4 +10,4 @@ edition = "2018"
 anyhow = "1.0"
 tokio = { version = "1", features = ["sync"] }
 launcher_api = { path = "../launcherapi" }
-uuid = { version = "0.8" }
+uuid = { version = "0.8", features = ["v4"] }
