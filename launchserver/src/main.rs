@@ -61,6 +61,8 @@ async fn main() -> std::io::Result<()> {
         .add_instance(hash_service);
     let sp_data = ntex::web::types::Data::new(sp);
     let sp_arc = sp_data.deref().clone();
+    let _: &SecurityService = sp_arc.resolve();
+    let _: &AuthProvider = sp_arc.resolve();
     hash::rehash(sp_arc.clone(), &[]).await;
     log::info!("Start launchserver");
     let extension_service: &ExtensionService = sp_arc.resolve();

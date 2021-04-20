@@ -7,11 +7,11 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
+
 pub type AuthGetChannel = Lazy<(
     Arc<Mutex<Sender<(String, Uuid, String)>>>,
     Arc<Mutex<Receiver<(String, Uuid, String)>>>,
 )>;
-
 pub static CHANNEL_GET: AuthGetChannel = Lazy::new(|| {
     let (rx, tx) = std::sync::mpsc::channel();
     (Arc::new(Mutex::new(rx)), Arc::new(Mutex::new(tx)))

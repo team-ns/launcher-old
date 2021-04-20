@@ -53,6 +53,7 @@ pub enum OsType {
     WindowsX32,
 }
 
+#[derive(Deserialize, Serialize, Debug)]
 pub struct ClientInfo {
     pub os_type: OsType,
 }

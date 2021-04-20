@@ -1,27 +1,33 @@
 use anyhow::{anyhow, Result};
 
 use launcher_api::message::{
-    AuthMessage, AuthResponse, ClientMessage, JoinServerMessage, ProfileMessage, ProfileResponse,
-    ProfilesInfoMessage, ProfilesInfoResponse, ServerMessage,
+    AuthMessage, AuthResponse, ClientMessage, ClientRequest, ConnectedMessage, JoinServerMessage,
+    ProfileMessage, ProfileResponse, ProfilesInfoMessage, ProfilesInfoResponse, ServerMessage,
+    ServerResponse,
 };
 use launcher_api::message::{Error, ProfileResourcesMessage, ProfileResourcesResponse};
 
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 
 use crate::config::CONFIG;
 
 use crate::security;
 use crate::security::validation::get_os_type;
 use crate::security::SecurityManager;
+use launcher_api::validation::ClientInfo;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::{oneshot, Mutex};
 use uuid::Uuid;
+use yarws::Msg;
 
 pub mod downloader;
 
 pub struct Client {
-    out: Sender<String>,
-    recv: Receiver<String>,
+    out: Sender<Msg>,
     security: SecurityManager,
     pub auth_info: Option<AuthInfo>,
+    requests: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ServerMessage>>>>,
 }
 
 #[derive(Clone)]
@@ -32,23 +38,52 @@ pub struct AuthInfo {
 }
 
 impl Client {
-    pub async fn new() -> Result<Self> {
+    pub async fn new(runtime_sender: UnboundedSender<String>) -> Result<Self> {
         let address: &str = &CONFIG.websocket;
-        let (s, r) = Client::connect(&address).await?;
+        let (s, mut r) = Client::connect(&address).await?;
+        let requests: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ServerMessage>>>> =
+            Default::default();
+        let response_requests = requests.clone();
+        tokio::spawn(async move {
+            loop {
+                match r.recv().await {
+                    None => {
+                        let mut requests = response_requests.lock().await;
+                        requests.clear();
+                        log::debug!("Websocket channel closed");
+                        break;
+                    }
+                    Some(m) => {
+                        if let Msg::Binary(m) = m {
+                            let response = bincode::deserialize::<ServerResponse>(&m)
+                                .expect("Can't parse response");
+                            log::debug!("Server message: {:?}", response);
+                            if let Some(request_id) = response.request_id {
+                                let mut requests = response_requests.lock().await;
+                                if let Some(sender) = requests.remove(&request_id) {
+                                    sender.send(response.message).expect("Can't send message");
+                                }
+                            } else if let ServerMessage::Runtime(message) = response.message {
+                                runtime_sender.send(message).expect("Can't send message");
+                            }
+                        }
+                    }
+                }
+            }
+        });
         Ok(Client {
             security: security::get_manager(),
-            recv: r,
             out: s,
             auth_info: None,
+            requests,
         })
     }
 
-    async fn connect(address: &str) -> Result<(Sender<String>, Receiver<String>)> {
+    async fn connect(address: &str) -> Result<(Sender<Msg>, Receiver<Msg>)> {
         let ws = yarws::Client::new(address)
             .connect()
             .await
-            .map_err(|_e| anyhow!("Connection error"))?
-            .into_text();
+            .map_err(|_e| anyhow!("Connection error"))?;
         Ok(ws.into_channel().await)
     }
 
@@ -65,6 +100,15 @@ impl Client {
             ServerMessage::Auth(auth) => Ok(auth),
             ServerMessage::Error(error) => Err(anyhow::anyhow!("{}", error.msg)),
             _ => Err(anyhow::anyhow!("Auth not found")),
+        }
+    }
+
+    pub async fn connected(&mut self, client_info: ClientInfo) -> Result<()> {
+        let message = ClientMessage::Connected(ConnectedMessage { client_info });
+        match self.send_sync(message).await {
+            ServerMessage::Empty => Ok(()),
+            ServerMessage::Error(error) => Err(anyhow::anyhow!("{}", error.msg)),
+            _ => Err(anyhow::anyhow!("Message not found")),
         }
     }
 
@@ -124,14 +168,26 @@ impl Client {
     }
 
     async fn send_sync(&mut self, msg: ClientMessage) -> ServerMessage {
+        let request_uuid = Uuid::new_v4();
+        let request = ClientRequest {
+            request_id: request_uuid,
+            message: msg,
+        };
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        {
+            let mut requests = self.requests.lock().await;
+            requests.insert(request_uuid, sender);
+        }
         self.out
-            .send(serde_json::to_string(&msg).unwrap())
+            .send(Msg::Binary(
+                bincode::serialize(&request).expect("Can't serialize client message"),
+            ))
             .await
-            .expect("Can't send message to server");
-        match self.recv.recv().await {
-            Some(message) => serde_json::from_str(&message).unwrap(),
-            None => ServerMessage::Error(Error {
-                msg: "Server Disconnected".to_string(),
+            .unwrap_or_else(|_| panic!("Can't send message to closed connection"));
+        match receiver.await {
+            Ok(message) => message,
+            Err(e) => ServerMessage::Error(Error {
+                msg: format!("Server Disconnected: {}", e),
             }),
         }
     }

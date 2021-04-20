@@ -17,9 +17,12 @@ use crate::config::{Settings, SETTINGS};
 use nfd2::Response;
 use path_slash::PathBufExt;
 
+use crate::security::validation::get_os_type;
+use launcher_api::validation::ClientInfo;
 use notify::EventKind;
 use std::{env, fs};
 use sysinfo::SystemExt;
+use tokio::sync::mpsc::UnboundedSender;
 use web_view::Handle;
 
 #[derive(Serialize, Deserialize)]
@@ -64,9 +67,13 @@ pub async fn login_user(
     Ok(())
 }
 
-pub async fn ready(handler: Handle<()>) -> Result<()> {
-    match Client::new().await {
-        Ok(c) => {
+pub async fn ready(handler: Handle<()>, sender: UnboundedSender<String>) -> Result<()> {
+    match Client::new(sender).await {
+        Ok(mut c) => {
+            let client_info = ClientInfo {
+                os_type: get_os_type(),
+            };
+            c.connected(client_info).await?;
             CLIENT
                 .set(Arc::new(Mutex::new(c)))
                 .map_err(|_| anyhow::anyhow!("Can't update client"))?;

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::profile::{Profile, ProfileInfo};
-use crate::validation::{OsType, RemoteDirectory};
+use crate::validation::{ClientInfo, OsType, RemoteDirectory};
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct ClientRequest {
@@ -18,6 +18,7 @@ pub struct ServerResponse {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub enum ClientMessage {
+    Connected(ConnectedMessage),
     Auth(AuthMessage),
     JoinServer(JoinServerMessage),
     ProfileResources(ProfileResourcesMessage),
@@ -40,6 +41,11 @@ pub enum ServerMessage {
 pub struct AuthMessage {
     pub login: String,
     pub password: String,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct ConnectedMessage {
+    pub client_info: ClientInfo,
 }
 
 #[derive(Deserialize, Serialize, Debug)]

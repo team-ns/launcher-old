@@ -3,8 +3,8 @@ use dlopen::symbor::{Library, Symbol};
 use launcher_extension_api::command::{CommandRegister, ExtensionCommand};
 
 use crate::util;
-use launcher_api::message::ClientMessage;
 use launcher_extension_api::connection::Client;
+use launcher_extension_api::launcher::message::{ClientMessage, ServerMessage};
 use launcher_extension_api::{LauncherExtension, Result};
 use std::collections::HashMap;
 use std::fs;
@@ -82,10 +82,23 @@ impl ExtensionService {
         commands
     }
 
-    pub fn handle_message(&self, message: &ClientMessage, client: &mut Client) -> Result<()> {
+    pub fn handle_connection(&self, client: &Client) {
         for library in self.extensions.values() {
-            library.extension.handle_message(message, client)?;
+            library.extension.handle_connection(client)
         }
-        Ok(())
+    }
+
+    pub fn handle_message(
+        &self,
+        message: &ClientMessage,
+        client: &mut Client,
+    ) -> Result<Option<ServerMessage>> {
+        for library in self.extensions.values() {
+            let response = library.extension.handle_message(message, client)?;
+            if response.is_some() {
+                return Ok(response);
+            }
+        }
+        Ok(None)
     }
 }
