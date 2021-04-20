@@ -65,6 +65,7 @@ impl ExtensionService {
     }
 
     pub fn initialize_extensions(&self) -> Result<()> {
+        log::info!("Initialize launchserver extensions");
         for library in self.extensions.values() {
             library.extension.init()?
         }

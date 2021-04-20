@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use teloc::dev::container::{InstanceContainer, SingletonContainer};
 use teloc::reexport::frunk::{HCons, HNil};
-use teloc::{EmptyServiceProvider, ServiceProvider};
+use teloc::{EmptyServiceProvider, Resolver, ServiceProvider};
 use tokio::sync::RwLock;
 
 use crate::auth::AuthProvider;
@@ -63,6 +63,10 @@ async fn main() -> std::io::Result<()> {
     let sp_arc = sp_data.deref().clone();
     hash::rehash(sp_arc.clone(), &[]).await;
     log::info!("Start launchserver");
+    let extension_service: &ExtensionService = sp_arc.resolve();
+    extension_service
+        .initialize_extensions()
+        .expect("Can't initialize extensions");
     tokio::join!(commands::run(sp_arc), server::run(sp_data))
         .1
         .expect("Can't run ntex server");
