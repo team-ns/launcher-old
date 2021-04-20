@@ -17,10 +17,10 @@ const FILE_EXTENSION: &str = "dll";
 type ExtensionFn = fn() -> (String, Box<dyn LauncherExtension>);
 
 pub struct ExtensionService {
-    extensions: HashMap<String, DynamicExtension>,
+    extensions: HashMap<String, ExtensionLibrary>,
 }
 
-pub struct DynamicExtension {
+pub struct ExtensionLibrary {
     _lib: Library,
     pub extension: Box<dyn LauncherExtension>,
 }
@@ -53,7 +53,7 @@ impl ExtensionService {
             let new_extension: Symbol<ExtensionFn> =
                 unsafe { lib.symbol("new_extension") }.expect("Can't load symbol");
             let extension: (String, Box<dyn LauncherExtension>) = new_extension();
-            let dynamic_extension = DynamicExtension {
+            let dynamic_extension = ExtensionLibrary {
                 _lib: lib,
                 extension: extension.1,
             };
@@ -63,8 +63,8 @@ impl ExtensionService {
     }
 
     pub fn initialize_extensions(&self) -> Result<()> {
-        for de in self.extensions.values() {
-            de.extension.init()?
+        for library in self.extensions.values() {
+            library.extension.init()?
         }
         Ok(())
     }
@@ -77,5 +77,12 @@ impl ExtensionService {
             commands.insert(extension_name.to_string(), register.into_commands());
         }
         commands
+    }
+
+    pub fn handle_auth(&self, login: &str, password: &str, ip: &str) -> Result<()> {
+        for library in self.extensions.values() {
+            library.extension.pre_auth(login, password, ip)?;
+        }
+        Ok(())
     }
 }

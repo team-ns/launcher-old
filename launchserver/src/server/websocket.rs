@@ -19,6 +19,7 @@ use crate::security::SecurityService;
 use crate::LauncherServiceProvider;
 
 use crate::auth::AuthProvider;
+use crate::extensions::ExtensionService;
 use crate::hash::{HashingService, NativeVersion};
 use crate::profile::ProfileService;
 use launcher_api::optional::{Location, Optional};
@@ -275,9 +276,10 @@ impl MessageHandle for AuthMessage {
     ) -> Result<ServerMessage> {
         let security_service: &SecurityService = sp.resolve();
         let auth_provider: &AuthProvider = sp.resolve();
-        //TODO ADD IP FOR LIMITERS
         let ip = client.ip.clone();
         let password = security_service.decrypt(&self.password)?;
+        let extension_service: &ExtensionService = sp.resolve();
+        extension_service.handle_auth(&self.login, &password, &ip)?;
         let result = auth_provider.auth(&self.login, &password, &ip).await?;
         let access_token = result.access_token;
         let uuid = result.uuid;

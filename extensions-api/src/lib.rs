@@ -9,4 +9,7 @@ pub trait LauncherExtension: Send + Sync {
     fn init(&self) -> Result<()> {
         Ok(())
     }
+    fn pre_auth(&self, _login: &str, _password: &str, _ip: &str) -> Result<()> {
+        Ok(())
+    }
 }
