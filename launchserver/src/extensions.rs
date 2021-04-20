@@ -3,6 +3,8 @@ use dlopen::symbor::{Library, Symbol};
 use launcher_extension_api::command::{CommandRegister, ExtensionCommand};
 
 use crate::util;
+use launcher_api::message::ClientMessage;
+use launcher_extension_api::connection::Client;
 use launcher_extension_api::{LauncherExtension, Result};
 use std::collections::HashMap;
 use std::fs;
@@ -79,9 +81,9 @@ impl ExtensionService {
         commands
     }
 
-    pub fn handle_auth(&self, login: &str, password: &str, ip: &str) -> Result<()> {
+    pub fn handle_message(&self, message: &ClientMessage, client: &mut Client) -> Result<()> {
         for library in self.extensions.values() {
-            library.extension.pre_auth(login, password, ip)?;
+            library.extension.handle_message(message, client)?;
         }
         Ok(())
     }

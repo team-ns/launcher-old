@@ -7,12 +7,12 @@ use launcher_api::message::{
     ProfileMessage, ProfileResourcesMessage, ProfileResourcesResponse, ProfileResponse,
     ProfilesInfoMessage, ProfilesInfoResponse, ServerMessage, ServerResponse,
 };
-use launcher_api::validation::{ClientInfo, RemoteDirectory, RemoteDirectoryExt};
+use launcher_api::validation::{RemoteDirectory, RemoteDirectoryExt};
 use log::debug;
 use log::error;
 use std::collections::HashMap;
 use std::hash::Hash;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::{mpsc, RwLock};
 
 use crate::security::SecurityService;
@@ -24,6 +24,7 @@ use crate::hash::{HashingService, NativeVersion};
 use crate::profile::ProfileService;
 use launcher_api::optional::{Location, Optional};
 use launcher_api::profile::ProfileInfo;
+use launcher_extension_api::connection::Client;
 use ntex::web::{ws, HttpRequest, HttpResponse};
 use ntex::{fn_factory_with_config, fn_service, map_config, rt, web, Service};
 use std::cell::RefCell;
@@ -31,30 +32,6 @@ use std::io;
 use std::ops::Deref;
 use std::rc::Rc;
 use teloc::Resolver;
-use uuid::Uuid;
-
-pub struct Client {
-    _uuid: Uuid,
-    #[allow(unused)] // remove when ready ip limiter
-    ip: String,
-    access_token: Option<String>,
-    username: Option<String>,
-    client_info: Option<ClientInfo>,
-    _channel: UnboundedSender<ServerMessage>,
-}
-
-impl Client {
-    fn new(ip: &str, tx: UnboundedSender<ServerMessage>) -> Self {
-        Client {
-            _uuid: Uuid::new_v4(),
-            ip: ip.to_string(),
-            access_token: None,
-            username: None,
-            client_info: None,
-            _channel: tx,
-        }
-    }
-}
 
 pub async fn ws_api(
     req: HttpRequest,
@@ -122,7 +99,7 @@ async fn ws_service(
     }))
 }
 
-async fn custom_messages(mut sink: ws::WebSocketsSink, mut rx: UnboundedReceiver<ServerMessage>) {
+async fn custom_messages(mut sink: ws::WebSocketsSink, mut rx: UnboundedReceiver<ServerResponse>) {
     while let Some(msg) = rx.recv().await {
         let result = bincode::serialize(&msg);
         if let Ok(bytes) = result {
@@ -143,6 +120,8 @@ pub async fn handle_message(
     sp: Arc<LauncherServiceProvider>,
 ) -> Result<ServerMessage> {
     let mut client = (*client).borrow_mut();
+    let extension_service: &ExtensionService = sp.resolve();
+    extension_service.handle_message(&request, &mut client)?;
     let msg = match request {
         ClientMessage::Auth(auth) => auth.message_handle(sp, &mut client).await,
         ClientMessage::JoinServer(join) => join.message_handle(sp, &mut client).await,
@@ -278,8 +257,6 @@ impl MessageHandle for AuthMessage {
         let auth_provider: &AuthProvider = sp.resolve();
         let ip = client.ip.clone();
         let password = security_service.decrypt(&self.password)?;
-        let extension_service: &ExtensionService = sp.resolve();
-        extension_service.handle_auth(&self.login, &password, &ip)?;
         let result = auth_provider.auth(&self.login, &password, &ip).await?;
         let access_token = result.access_token;
         let uuid = result.uuid;

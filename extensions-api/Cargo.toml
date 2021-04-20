@@ -8,3 +8,6 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
+tokio = { version = "1", features = ["sync"] }
+launcher_api = { path = "../launcherapi" }
+uuid = { version = "0.8" }
