@@ -1,5 +1,11 @@
+use crate::auth::AuthProvider;
+use crate::extensions::ExtensionService;
+use crate::profile::ProfileService;
+use crate::{hash, profile, LauncherServiceProvider};
+use anyhow::Result;
 use futures::future::BoxFuture;
 use futures::FutureExt;
+use launcher_extension_api::command::ExtensionCommand;
 use launcher_macro::{command, register_commands};
 use log::info;
 use rustyline::completion::{extract_word, Completer};
@@ -10,14 +16,8 @@ use rustyline_derive::{Helper, Highlighter, Hinter, Validator};
 use std::collections::HashMap;
 use std::process::exit;
 use std::sync::Arc;
-use tokio::sync::RwLock;
-
-use crate::auth::AuthProvider;
-use crate::extensions::ExtensionService;
-use crate::profile::ProfileService;
-use crate::{hash, profile, LauncherServiceProvider};
-use launcher_extension_api::command::ExtensionCommand;
 use teloc::Resolver;
+use tokio::sync::RwLock;
 
 type CmdFn = for<'a> fn(Arc<LauncherServiceProvider>, &'a [&str]) -> BoxFuture<'a, ()>;
 
@@ -115,7 +115,7 @@ impl CommandHelper {
     }
 }
 
-pub async fn run(server: Arc<LauncherServiceProvider>) {
+pub async fn run(server: Arc<LauncherServiceProvider>) -> Result<()> {
     tokio::spawn(async move {
         let rl_config = LineConfig::builder()
             .history_ignore_space(true)
@@ -145,6 +145,7 @@ pub async fn run(server: Arc<LauncherServiceProvider>) {
             }
         }
     });
+    Ok(())
 }
 
 #[command(description = "Update checksum of profile files")]

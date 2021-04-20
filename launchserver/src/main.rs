@@ -67,8 +67,9 @@ async fn main() -> std::io::Result<()> {
     extension_service
         .initialize_extensions()
         .expect("Can't initialize extensions");
-    tokio::join!(commands::run(sp_arc), server::run(sp_data))
-        .1
-        .expect("Can't run ntex server");
+    let result = tokio::try_join!(commands::run(sp_arc), server::run(sp_data));
+    if let Err(e) = result {
+        log::error!("Can't run launchserver with error: {}", e)
+    }
     Ok(())
 }
