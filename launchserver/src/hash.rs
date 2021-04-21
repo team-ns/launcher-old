@@ -22,12 +22,13 @@ use crate::{profile, LauncherServiceProvider};
 
 mod arch;
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Debug)]
 pub struct NativeVersion {
     pub version: String,
     pub os_type: OsType,
 }
 
+#[derive(Debug)]
 pub struct HashingService {
     pub profiles: Option<HashMap<String, RemoteDirectory>>,
     pub libraries: Option<HashMap<String, RemoteDirectory>>,
@@ -157,26 +158,33 @@ impl HashingService {
                 .flat_map(|optional| optional.get_paths())
                 .collect::<Vec<_>>();
             for lib in &profile.libraries {
-                let lib = PathBuf::from(format!("libraries/{}", lib));
-                match libs.get(&lib) {
+                let lib_path = PathBuf::from(format!("libraries/{}", lib));
+                match libs.get(&lib_path) {
                     Some(file) => {
-                        hashed_profile_libs.insert(lib, file.clone());
+                        hashed_profile_libs.insert(lib_path, file.clone());
                     }
                     None => {
                         let paths = paths
                             .iter()
-                            .filter_map(|(key, val)| if val == &&lib { Some(key) } else { None })
+                            .filter_map(|(key, val)| {
+                                if val == &&PathBuf::from(lib) {
+                                    Some(key)
+                                } else {
+                                    None
+                                }
+                            })
                             .collect::<Vec<_>>();
                         if paths.is_empty() {
                             error!(
                                 "Profile '{}' use lib '{:?}' that doesn't exists in files!",
-                                profile.name, lib
+                                profile.name, lib_path
                             );
                         } else {
                             for &path in paths {
-                                match libs.get(path) {
+                                let lib_path = PathBuf::from("libraries").join(path);
+                                match libs.get(&lib_path) {
                                     Some(file) => {
-                                        hashed_profile_libs.insert(path.clone(), file.clone());
+                                        hashed_profile_libs.insert(lib_path, file.clone());
                                     }
                                     None => {
                                         error!(
