@@ -12,7 +12,7 @@ use teloc::Resolver;
 use tokio::sync::RwLock;
 use walkdir::DirEntry;
 
-use launcher_api::profile::Profile;
+use launcher_api::profile::{Profile, ProfileData};
 use launcher_api::validation::{OsType, RemoteDirectory, RemoteFile};
 
 use crate::config::Config;
@@ -89,21 +89,24 @@ pub fn create_remote_file<P: AsRef<Path>>(path: P, file_server: String) -> Resul
 }
 
 impl HashingService {
-    pub fn rehash<'a, I: Clone + Iterator<Item = &'a Profile>>(
+    pub fn rehash<'a, I: Clone + Iterator<Item = &'a ProfileData>>(
         &mut self,
-        profiles: I,
+        profiles_data: I,
         args: &[&str],
         file_server: String,
     ) {
         get_resource!(
             args,
             self.profiles,
-            Self::hash_profiles(profiles.clone(), file_server.clone())
+            Self::hash_profiles(
+                profiles_data.clone().map(|data| &data.profile),
+                file_server.clone()
+            )
         );
         get_resource!(
             args,
             self.libraries,
-            Self::hash_libraries(profiles, file_server.clone())
+            Self::hash_libraries(profiles_data, file_server.clone())
         );
         get_resource!(args, self.assets, Self::hash_assets(file_server.clone()));
         get_resource!(args, self.natives, Self::hash_natives(file_server.clone()));
@@ -131,8 +134,8 @@ impl HashingService {
         Ok(hashed_profiles)
     }
 
-    fn hash_libraries<'a, I: Clone + Iterator<Item = &'a Profile>>(
-        profiles: I,
+    fn hash_libraries<'a, I: Clone + Iterator<Item = &'a ProfileData>>(
+        profiles_data: I,
         file_server: String,
     ) -> Result<HashMap<String, RemoteDirectory>> {
         let mut libs = HashMap::new();
@@ -144,8 +147,15 @@ impl HashingService {
         }
         let mut hashed_libs = HashMap::new();
 
-        for profile in profiles {
+        for profile_data in profiles_data {
+            let profile: &Profile = &profile_data.profile;
             let mut hashed_profile_libs = RemoteDirectory::new();
+            let paths = &profile_data
+                .profile_info
+                .optionals
+                .iter()
+                .flat_map(|optional| optional.get_paths())
+                .collect::<Vec<_>>();
             for lib in &profile.libraries {
                 let lib = PathBuf::from(format!("libraries/{}", lib));
                 match libs.get(&lib) {
@@ -153,10 +163,30 @@ impl HashingService {
                         hashed_profile_libs.insert(lib, file.clone());
                     }
                     None => {
-                        error!(
-                            "Profile '{}' use lib '{:?}' that doesn't exists in files!",
-                            profile.name, lib
-                        );
+                        let paths = paths
+                            .iter()
+                            .filter_map(|(key, val)| if val == &&lib { Some(key) } else { None })
+                            .collect::<Vec<_>>();
+                        if paths.is_empty() {
+                            error!(
+                                "Profile '{}' use lib '{:?}' that doesn't exists in files!",
+                                profile.name, lib
+                            );
+                        } else {
+                            for &path in paths {
+                                match libs.get(path) {
+                                    Some(file) => {
+                                        hashed_profile_libs.insert(path.clone(), file.clone());
+                                    }
+                                    None => {
+                                        error!(
+                                            "Profile '{}' use optionals file action for renaming lib '{:?}' that doesn't exists in files!",
+                                            profile.name, path
+                                        );
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -274,10 +304,7 @@ pub async fn rehash(sp: Arc<LauncherServiceProvider>, args: &[&str]) {
     let hashing_service: Arc<RwLock<HashingService>> = sp.resolve();
     let mut hashing_service = hashing_service.write().await;
     hashing_service.rehash(
-        profile_service
-            .profiles_data
-            .values()
-            .map(|data| &data.profile),
+        profile_service.profiles_data.values(),
         args,
         config.file_server.clone(),
     );

@@ -19,7 +19,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{oneshot, Mutex};
 use uuid::Uuid;
-use yarws::Msg;
 
 pub mod downloader;
 

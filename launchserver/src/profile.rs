@@ -91,15 +91,15 @@ fn get_optionals(profile_dir: &DirEntry) -> Vec<Optional> {
                     !visible_none
                 });
                 optionals.dedup_by(|a, b| {
-                    let unique = a.name.is_some() && b.name.is_some() && a.name == b.name;
-                    if !unique {
+                    let non_unique = a.name.is_some() && b.name.is_some() && a.name == b.name;
+                    if non_unique {
                         error!(
                             "Find duplicate name for optional: `{}` in profile: `{:?}`",
                             a.name.as_ref().unwrap(),
                             profile_dir.file_name()
                         )
                     }
-                    unique
+                    non_unique
                 });
                 optionals
             }

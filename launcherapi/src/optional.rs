@@ -1,6 +1,7 @@
 use crate::validation::{ClientInfo, OsType};
 use serde::{Deserialize, Serialize};
 
+use std::collections::hash_map::Iter;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -128,6 +129,20 @@ impl Optional {
             entry.rename_paths.extend(action.files.rename_paths.clone());
         }
         map
+    }
+
+    pub fn get_paths(&self) -> impl Iterator<Item = (&PathBuf, &PathBuf)> {
+        self.actions
+            .iter()
+            .filter_map(|action| match action {
+                Action::Files(files) => Some(files),
+                _ => None,
+            })
+            .filter_map(|file| match file.location {
+                Location::Libraries => Some(&file.files.rename_paths),
+                _ => None,
+            })
+            .flat_map(|map| map.iter())
     }
 }
 
