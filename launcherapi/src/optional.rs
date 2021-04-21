@@ -2,6 +2,7 @@ use crate::validation::{ClientInfo, OsType};
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -13,15 +14,15 @@ pub enum Action {
 #[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct OptionalFiles {
     #[serde(default)]
-    pub original_paths: Vec<String>,
+    pub original_paths: Vec<PathBuf>,
     #[serde(default)]
-    pub rename_paths: HashMap<String, String>,
+    pub rename_paths: HashMap<PathBuf, PathBuf>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FileAction {
-    location: Location,
-    files: OptionalFiles,
+    pub location: Location,
+    pub files: OptionalFiles,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash, Debug)]
@@ -41,9 +42,9 @@ pub enum Rule {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct OsRule {
-    os_type: OsType,
+    pub os_type: OsType,
     #[serde(default)]
-    compare_mode: CompareMode,
+    pub compare_mode: CompareMode,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -74,8 +75,8 @@ impl Apply for OsRule {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Optional {
-    actions: Vec<Action>,
-    rules: Vec<Rule>,
+    pub actions: Vec<Action>,
+    pub rules: Vec<Rule>,
     #[serde(default = "default_enabled")]
     pub enabled: bool,
     #[serde(default = "default_visible")]

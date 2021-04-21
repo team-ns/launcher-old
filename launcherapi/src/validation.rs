@@ -32,10 +32,10 @@ impl RemoteDirectoryExt for RemoteDirectory {
     fn filter_files(mut self, files: Option<&OptionalFiles>) -> Self {
         if let Some(files) = files {
             for path in &files.original_paths {
-                self.remove(&PathBuf::from(path));
+                self.remove(path);
             }
             for path in &files.rename_paths {
-                if let Some(file) = self.remove(&PathBuf::from(path.0)) {
+                if let Some(file) = self.remove(path.0) {
                     self.insert(PathBuf::from(path.1), file);
                 }
             }
