@@ -24,7 +24,7 @@ use yarws::Msg;
 pub mod downloader;
 
 pub struct Client {
-    out: Sender<Msg>,
+    sender: Sender<Vec<u8>>,
     security: SecurityManager,
     pub auth_info: Option<AuthInfo>,
     requests: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ServerMessage>>>>,
@@ -40,32 +40,32 @@ pub struct AuthInfo {
 impl Client {
     pub async fn new(runtime_sender: UnboundedSender<String>) -> Result<Self> {
         let address: &str = &CONFIG.websocket;
-        let (s, mut r) = Client::connect(&address).await?;
+        let (sender, mut receiver) = Client::connect(&address).await?;
         let requests: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ServerMessage>>>> =
             Default::default();
         let response_requests = requests.clone();
         tokio::spawn(async move {
             loop {
-                match r.recv().await {
+                match receiver.recv().await {
                     None => {
                         let mut requests = response_requests.lock().await;
                         requests.clear();
                         log::debug!("Websocket channel closed");
                         break;
                     }
-                    Some(m) => {
-                        if let Msg::Binary(m) = m {
-                            let response = bincode::deserialize::<ServerResponse>(&m)
-                                .expect("Can't parse response");
-                            log::debug!("Server message: {:?}", response);
-                            if let Some(request_id) = response.request_id {
-                                let mut requests = response_requests.lock().await;
-                                if let Some(sender) = requests.remove(&request_id) {
-                                    sender.send(response.message).expect("Can't send message");
-                                }
-                            } else if let ServerMessage::Runtime(message) = response.message {
-                                runtime_sender.send(message).expect("Can't send message");
+                    Some(message) => {
+                        let response = bincode::deserialize::<ServerResponse>(&message)
+                            .expect("Can't parse response");
+                        log::debug!("Server message: {:?}", response);
+                        if let Some(request_id) = response.request_id {
+                            let mut requests = response_requests.lock().await;
+                            if let Some(sender) = requests.remove(&request_id) {
+                                sender.send(response.message).expect("Can't send message");
                             }
+                        } else if let ServerMessage::Runtime(message) = response.message {
+                            runtime_sender
+                                .send(message)
+                                .expect("Can't send message to runtime");
                         }
                     }
                 }
@@ -73,17 +73,18 @@ impl Client {
         });
         Ok(Client {
             security: security::get_manager(),
-            out: s,
+            sender,
             auth_info: None,
             requests,
         })
     }
 
-    async fn connect(address: &str) -> Result<(Sender<Msg>, Receiver<Msg>)> {
+    async fn connect(address: &str) -> Result<(Sender<Vec<u8>>, Receiver<Vec<u8>>)> {
         let ws = yarws::Client::new(address)
             .connect()
             .await
-            .map_err(|_e| anyhow!("Connection error"))?;
+            .map_err(|_e| anyhow!("Connection error"))?
+            .into_binary();
         Ok(ws.into_channel().await)
     }
 
@@ -178,10 +179,8 @@ impl Client {
             let mut requests = self.requests.lock().await;
             requests.insert(request_uuid, sender);
         }
-        self.out
-            .send(Msg::Binary(
-                bincode::serialize(&request).expect("Can't serialize client message"),
-            ))
+        self.sender
+            .send(bincode::serialize(&request).expect("Can't serialize client message"))
             .await
             .unwrap_or_else(|_| panic!("Can't send message to closed connection"));
         match receiver.await {
