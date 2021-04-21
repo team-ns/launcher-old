@@ -233,7 +233,7 @@ pub async fn start_client(
             .expect("Can't send join request");
         }
     });
-    let game_handle = futures::future::join(game_handle, join_handle);
+    let game_handle = futures::future::try_join(game_handle, join_handle);
     tokio::select! {
         watch_result = watcher_handle => {
             if let Err(e) = watch_result? {
@@ -242,7 +242,7 @@ pub async fn start_client(
             }
         }
         game_result = game_handle => {
-            game_result.0??;
+            game_result?.0?;
         }
 
     }
