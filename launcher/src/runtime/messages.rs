@@ -120,7 +120,7 @@ pub async fn ready(handler: Handle<()>, sender: UnboundedSender<String>) -> Resu
                 ))?;
                 Ok(())
             })?;
-            tokio::time::delay_for(Duration::from_secs(10)).await;
+            tokio::time::sleep(Duration::from_secs(10)).await;
             handler.dispatch(move |w| {
                 w.exit();
                 Ok(())

@@ -18,8 +18,8 @@ base64 = "0.12.1"
 rust-embed="5.5.1"
 yarws = { git = "https://github.com/team-ns/yarws"}
 ecies-ed25519 = "0.3"
-hyper = "0.13.6"
-hyper-tls = "0.4.1"
+hyper = { version = "0.14", features = ["client", "http2", "http1"]}
+hyper-tls = "0.5"
 futures = "0.3"
 anyhow = "1.0.31"
 notify = "5.0.0-pre.2"
@@ -37,7 +37,7 @@ lazy-static-include = "3.0.5"
 git = "https://github.com/team-ns/web-view"
 
 [dependencies.tokio]
-version = "0.2"
+version = "1"
 features = ["full"]
 
 [dependencies.launcher_api]
