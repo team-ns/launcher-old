@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -12,29 +10,26 @@ use teloc::Resolver;
 use tokio::sync::RwLock;
 use walkdir::DirEntry;
 
-use launcher_api::profile::{Profile, ProfileData};
+use futures::{Stream, StreamExt};
+use itertools::Itertools;
+use launcher_api::profile::ProfileData;
 use launcher_api::validation::{OsType, RemoteDirectory, RemoteFile};
+use launcher_macro::hash;
+
+use tokio::fs;
 
 use crate::config::Config;
+use crate::hash::resources::{FileLocation, NativeVersion};
 use crate::profile::ProfileService;
 use crate::util;
-use crate::{profile, LauncherServiceProvider};
+use crate::LauncherServiceProvider;
 
 mod arch;
+pub mod resources;
 
-#[derive(PartialEq, Eq, Hash, Debug)]
-pub struct NativeVersion {
-    pub version: String,
-    pub os_type: OsType,
-}
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct HashingService {
-    pub profiles: Option<HashMap<String, RemoteDirectory>>,
-    pub libraries: Option<HashMap<String, RemoteDirectory>>,
-    pub assets: Option<HashMap<String, RemoteDirectory>>,
-    pub natives: Option<HashMap<NativeVersion, RemoteDirectory>>,
-    pub jres: Option<HashMap<OsType, RemoteDirectory>>,
+    pub files: HashMap<FileLocation, RemoteDirectory>,
 }
 
 #[teloc::inject]
@@ -44,127 +39,58 @@ impl HashingService {
     }
 }
 
-impl Default for HashingService {
-    fn default() -> Self {
-        Self {
-            profiles: None,
-            libraries: None,
-            assets: None,
-            natives: None,
-            jres: None,
-        }
-    }
-}
-
-macro_rules! get_resource {
-    ($args:expr, $resource:expr, $hash_resource:expr) => {
-        let resource_name = &stringify!($resource)[5..];
-        if $args.is_empty() || $args.contains(&resource_name) {
-            match $hash_resource {
-                Ok(resource) => {
-                    $resource = Some(resource);
-                    info!("Successfully rehash {}!", resource_name);
-                }
-                Err(error) => error!("Error while hashing {}: {}!", resource_name, error),
-            }
-        }
-    };
-}
-
-pub fn create_remote_file<P: AsRef<Path>>(path: P, file_server: String) -> Result<RemoteFile> {
-    let mut buffer = Vec::new();
-    File::open(&path)?.read_to_end(&mut buffer)?;
-    Ok(RemoteFile {
-        uri: Url::parse(&format!(
-            "{}/{}",
-            file_server,
-            path.as_ref()
-                .strip_prefix("static/")
-                .expect("Failed to strip prefix while rehash file!")
-                .to_slash_lossy()
-        ))?
-        .into_string(),
-        size: buffer.len() as u64,
-        checksum: t1ha::t1ha2_atonce128(buffer.as_slice(), 1),
-    })
-}
-
 impl HashingService {
-    pub fn rehash<'a, I: Clone + Iterator<Item = &'a ProfileData>>(
+    pub async fn rehash(
         &mut self,
-        profiles_data: I,
         args: &[&str],
-        file_server: String,
+        file_server: &str,
+        profiles_data: Vec<&ProfileData>,
     ) {
-        get_resource!(
+        hash!(
             args,
-            self.profiles,
-            Self::hash_profiles(
-                profiles_data.clone().map(|data| &data.profile),
-                file_server.clone()
-            )
+            self.hash_profiles(file_server, &profiles_data),
+            self.hash_libraries(file_server, &profiles_data),
+            self.hash_assets(file_server),
+            self.hash_natives(file_server),
+            self.hash_jres(file_server)
         );
-        get_resource!(
-            args,
-            self.libraries,
-            Self::hash_libraries(profiles_data, file_server.clone())
-        );
-        get_resource!(args, self.assets, Self::hash_assets(file_server.clone()));
-        get_resource!(args, self.natives, Self::hash_natives(file_server.clone()));
-        get_resource!(args, self.jres, Self::hash_jres(file_server));
         info!("Rehash was successfully finished!");
     }
 
-    fn hash_profiles<'a, I: Clone + Iterator<Item = &'a Profile>>(
-        profiles: I,
-        file_server: String,
-    ) -> Result<HashMap<String, RemoteDirectory>> {
-        let mut hashed_profiles = HashMap::new();
-
-        for profile in profiles {
-            let mut hashed_profile = RemoteDirectory::new();
-
-            let file_iter =
-                util::fs::get_files_from_dir(format!("static/profiles/{}", profile.name)).filter(
-                    |e| !profile::BLACK_LIST.contains(&e.file_name().to_str().unwrap_or("")),
-                );
-            fill_map(file_iter, &mut hashed_profile, file_server.clone())?;
-
-            hashed_profiles.insert(profile.name.clone(), hashed_profile);
+    async fn hash_profiles(&mut self, file_server: &str, profiles_data: &[&ProfileData]) {
+        for profile_data in profiles_data {
+            let profile = &profile_data.profile.name;
+            let remote_directory =
+                Self::get_remote_dir(Path::new("static/profiles").join(profile), file_server).await;
+            self.files
+                .insert(FileLocation::Profile(profile.to_string()), remote_directory);
         }
-        Ok(hashed_profiles)
     }
 
-    fn hash_libraries<'a, I: Clone + Iterator<Item = &'a ProfileData>>(
-        profiles_data: I,
-        file_server: String,
-    ) -> Result<HashMap<String, RemoteDirectory>> {
-        let mut libs = HashMap::new();
-        for file in util::fs::get_files_from_dir("static/libraries") {
-            libs.insert(
-                file.path().strip_prefix("static/")?.to_owned(),
-                create_remote_file(file.path(), file_server.clone())?,
-            );
-        }
-        let mut hashed_libs = HashMap::new();
+    async fn hash_libraries(&mut self, file_server: &str, profiles_data: &[&ProfileData]) {
+        let remote_directory =
+            Self::get_remote_dir(Path::new("static/libraries"), file_server).await;
 
         for profile_data in profiles_data {
-            let profile: &Profile = &profile_data.profile;
-            let mut hashed_profile_libs = RemoteDirectory::new();
-            let paths = &profile_data
+            let mut profile_libs = RemoteDirectory::new();
+            let profile = &profile_data.profile;
+
+            let rename_paths = profile_data
                 .profile_info
                 .optionals
                 .iter()
                 .flat_map(|optional| optional.get_paths())
                 .collect::<Vec<_>>();
+
             for lib in &profile.libraries {
-                let lib_path = PathBuf::from(format!("libraries/{}", lib));
-                match libs.get(&lib_path) {
+                let lib_path = PathBuf::from("libraries").join(lib);
+
+                match remote_directory.get(&lib_path) {
                     Some(file) => {
-                        hashed_profile_libs.insert(lib_path, file.clone());
+                        profile_libs.insert(lib_path, file.clone());
                     }
                     None => {
-                        let paths = paths
+                        let paths = rename_paths
                             .iter()
                             .filter_map(|(key, val)| {
                                 if val == &&PathBuf::from(lib) {
@@ -180,17 +106,17 @@ impl HashingService {
                                 profile.name, lib_path
                             );
                         } else {
-                            for &path in paths {
+                            for path in paths {
                                 let lib_path = PathBuf::from("libraries").join(path);
-                                match libs.get(&lib_path) {
+                                match remote_directory.get(&lib_path) {
                                     Some(file) => {
-                                        hashed_profile_libs.insert(lib_path, file.clone());
+                                        profile_libs.insert(lib_path, file.clone());
                                     }
                                     None => {
                                         error!(
-                                            "Profile '{}' use optionals file action for renaming lib '{:?}' that doesn't exists in files!",
-                                            profile.name, path
-                                        );
+                                             "Profile '{}' use optionals file action for renaming lib {:?} that doesn't exists in files!",
+                                             profile.name, path
+                                         );
                                     }
                                 }
                             }
@@ -198,111 +124,144 @@ impl HashingService {
                     }
                 }
             }
-            hashed_libs.insert(profile.name.clone(), hashed_profile_libs);
+
+            self.files
+                .insert(FileLocation::Libraries(profile.name.clone()), profile_libs);
         }
-        Ok(hashed_libs)
     }
 
-    fn hash_assets(file_server: String) -> Result<HashMap<String, RemoteDirectory>> {
-        let mut hashed_assets = HashMap::new();
-
+    async fn hash_assets(&mut self, file_server: &str) {
         for version in util::fs::get_first_level_dirs("static/assets") {
-            let path = version.path();
-            hashed_assets.insert(
-                util::fs::strip(path, "static/assets/")?,
-                create_hashed_dir(path, file_server.clone())?,
-            );
+            let version_path = version.path();
+            match util::fs::strip(version_path, "static/assets/") {
+                Ok(path) => {
+                    self.files.insert(
+                        FileLocation::Assets(path),
+                        Self::get_remote_dir(version_path, file_server).await,
+                    );
+                }
+                Err(error) => error!("Failed to get version while hashing assets: {:?}", error),
+            }
         }
-        Ok(hashed_assets)
     }
 
-    fn hash_natives(file_server: String) -> Result<HashMap<NativeVersion, RemoteDirectory>> {
-        let mut hashed_natives: HashMap<NativeVersion, RemoteDirectory> = HashMap::new();
-
+    async fn hash_natives(&mut self, file_server: &str) {
         for version in util::fs::get_first_level_dirs("static/natives") {
-            let mut hashed_native = HashMap::new();
-
             let version_path = version.path();
-            for file in util::fs::get_files_from_dir(version_path) {
-                let path = file.path();
-                match arch::get_os_type(path) {
-                    Ok(os_type) => {
-                        hashed_native
-                            .entry(os_type)
-                            .or_insert_with(RemoteDirectory::default)
-                            .insert(
-                                PathBuf::from(util::fs::strip(path, "static/")?),
-                                create_remote_file(path, file_server.clone())?,
-                            );
+            let hashed_native =
+                Self::hash_files(util::fs::get_files_from_dir(version_path), file_server)
+                    .filter_map(|file| async {
+                        match arch::get_os_type(&file.0).await {
+                            Ok(os_type) => Some((os_type, file)),
+                            Err(error) => {
+                                error!("Error while hashing natives: {:?}", error);
+                                None
+                            }
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .await
+                    .into_iter()
+                    .into_group_map();
+
+            match util::fs::strip(version_path, "static/natives/") {
+                Ok(version) => {
+                    for native in hashed_native {
+                        let native_version = NativeVersion::new(version.clone(), native.0);
+                        self.files.insert(
+                            FileLocation::Natives(native_version),
+                            native.1.into_iter().collect(),
+                        );
                     }
-                    Err(error) => error!("{:?}", error),
+                }
+                Err(error) => {
+                    error!("{:?}", error);
                 }
             }
-
-            let version = util::fs::strip(version_path, "static/natives/")?;
-
-            for native in hashed_native {
-                let native_version = NativeVersion {
-                    version: version.clone(),
-                    os_type: native.0.to_owned(),
-                };
-                hashed_natives.insert(native_version, native.1);
-            }
         }
-        Ok(hashed_natives)
     }
 
-    fn hash_jres(file_server: String) -> Result<HashMap<OsType, RemoteDirectory>> {
-        let mut hashed_jres = HashMap::new();
-
-        let jres = vec![
-            (OsType::LinuxX64, "LinuxX64"),
-            (OsType::LinuxX32, "LinuxX32"),
-            (OsType::MacOsX64, "MacOSX64"),
-            (OsType::WindowsX64, "WindowsX64"),
-            (OsType::WindowsX32, "WindowsX32"),
+    async fn hash_jres(&mut self, file_server: &str) {
+        let types = vec![
+            OsType::LinuxX64,
+            OsType::LinuxX32,
+            OsType::MacOsX64,
+            OsType::WindowsX64,
+            OsType::WindowsX32,
         ];
 
-        for jre in jres {
-            hashed_jres.insert(
-                jre.0,
-                create_hashed_dir(format!("static/jre/{}", jre.1), file_server.clone())?,
-            );
-        }
-        Ok(hashed_jres)
-    }
-}
-
-fn fill_map(
-    iter: impl Iterator<Item = DirEntry>,
-    map: &mut HashMap<PathBuf, RemoteFile>,
-    file_server: String,
-) -> Result<()> {
-    for file in iter {
-        let path = file.path();
-        let strip_path = if path.starts_with("static/jre") {
-            util::fs::strip_folder(
-                path.strip_prefix("static/")
-                    .expect("Failed to strip prefix!"),
-                1,
-                1,
+        for os_type in types {
+            let remote_directory = Self::get_remote_dir(
+                Path::new("static/jre").join(os_type.to_string()),
+                file_server,
             )
-        } else {
-            util::fs::strip(path, "static/")?
-        };
-        map.insert(
-            PathBuf::from(strip_path),
-            create_remote_file(path, file_server.clone())?,
-        );
+            .await;
+            self.files
+                .insert(FileLocation::Jres(os_type), remote_directory);
+        }
     }
-    Ok(())
-}
 
-fn create_hashed_dir<P: AsRef<Path>>(path: P, file_server: String) -> Result<RemoteDirectory> {
-    let mut directory = RemoteDirectory::new();
-    let iter = util::fs::get_files_from_dir(path);
-    fill_map(iter, &mut directory, file_server)?;
-    Ok(directory)
+    fn hash_files<'a>(
+        files: impl Iterator<Item = DirEntry> + 'a,
+        file_server: &'a str,
+    ) -> impl Stream<Item = (PathBuf, RemoteFile)> + 'a {
+        futures::stream::iter(files.map(|e| e.into_path())).filter_map(move |path| async move {
+            match Self::get_remote_file(file_server, path.as_path()).await {
+                Ok(file) => {
+                    let strip_path = if path.starts_with("static/jre") {
+                        util::fs::strip_folder(
+                            path.strip_prefix("static/")
+                                .expect("Failed to strip prefix!"),
+                            1,
+                            1,
+                        )
+                    } else {
+                        util::fs::strip(path.as_path(), "static/").unwrap()
+                    };
+                    Some((PathBuf::from(strip_path), file))
+                }
+                Err(error) => {
+                    error!("Error while hashing: {:?}", error);
+                    None
+                }
+            }
+        })
+    }
+
+    async fn get_remote_file<P: AsRef<Path>>(file_server: &str, path: P) -> Result<RemoteFile> {
+        match &fs::read(path.as_ref()).await {
+            Ok(bytes) => match Url::parse(&format!(
+                "{}/{}",
+                file_server,
+                path.as_ref()
+                    .strip_prefix("static/")
+                    .expect("Failed to strip prefix to create remote file!")
+                    .to_slash_lossy()
+            )) {
+                Ok(uri) => Ok(RemoteFile {
+                    uri: uri.to_string(),
+                    size: bytes.len(),
+                    checksum: t1ha::t1ha2_atonce128(bytes, 1),
+                }),
+                Err(error) => Err(anyhow::anyhow!(
+                    "Failed to parse uri for file {:?} with error {:?}",
+                    path.as_ref(),
+                    error
+                )),
+            },
+            Err(error) => Err(anyhow::anyhow!(
+                "Failed to read file {:?} with error {:?}",
+                path.as_ref(),
+                error
+            )),
+        }
+    }
+
+    async fn get_remote_dir<P: AsRef<Path>>(path: P, file_server: &str) -> RemoteDirectory {
+        Self::hash_files(util::fs::get_files_from_dir(path), file_server)
+            .collect::<HashMap<_, _>>()
+            .await
+    }
 }
 
 pub async fn rehash(sp: Arc<LauncherServiceProvider>, args: &[&str]) {
@@ -311,9 +270,11 @@ pub async fn rehash(sp: Arc<LauncherServiceProvider>, args: &[&str]) {
     let profile_service = profile_service.read().await;
     let hashing_service: Arc<RwLock<HashingService>> = sp.resolve();
     let mut hashing_service = hashing_service.write().await;
-    hashing_service.rehash(
-        profile_service.profiles_data.values(),
-        args,
-        config.file_server.clone(),
-    );
+    hashing_service
+        .rehash(
+            args,
+            &config.file_server,
+            profile_service.profiles_data.values().collect::<Vec<_>>(),
+        )
+        .await;
 }
