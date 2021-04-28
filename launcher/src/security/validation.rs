@@ -43,7 +43,7 @@ pub fn create_hashed_file<P: AsRef<Path>>(path: P) -> Result<HashedFile> {
     let mut buffer = Vec::new();
     File::open(path)?.read_to_end(&mut buffer)?;
     Ok(HashedFile {
-        size: buffer.len() as u64,
+        size: buffer.len(),
         checksum: t1ha::t1ha2_atonce128(buffer.as_slice(), 1),
     })
 }
