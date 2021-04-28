@@ -4,27 +4,14 @@ use anyhow::Result;
 use futures::SinkExt;
 use launcher_api::message::{
     AuthMessage, AuthResponse, ClientMessage, ClientRequest, ConnectedMessage, Error,
-    JoinServerMessage, ProfileMessage, ProfileResourcesMessage, ProfileResourcesResponse,
-    ProfileResponse, ProfilesInfoMessage, ProfilesInfoResponse, ServerMessage, ServerResponse,
+    JoinServerMessage, ProfileMessage, ProfileResourcesMessage, ProfileResponse,
+    ProfilesInfoMessage, ProfilesInfoResponse, ServerMessage, ServerResponse,
 };
-use launcher_api::validation::{RemoteDirectory, RemoteDirectoryExt};
-use log::debug;
-use log::error;
-use std::collections::HashMap;
-use std::hash::Hash;
-use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::sync::{mpsc, RwLock};
-
-use crate::security::SecurityService;
-use crate::LauncherServiceProvider;
-
-use crate::auth::AuthProvider;
-use crate::extensions::ExtensionService;
-use crate::hash::{HashingService, NativeVersion};
-use crate::profile::ProfileService;
-use launcher_api::optional::{Location, Optional};
+use launcher_api::optional::Optional;
 use launcher_api::profile::ProfileInfo;
 use launcher_extension_api::connection::Client;
+use log::debug;
+use log::error;
 use ntex::web::{ws, HttpRequest, HttpResponse};
 use ntex::{fn_factory_with_config, fn_service, map_config, rt, web, Service};
 use std::cell::RefCell;
@@ -32,6 +19,16 @@ use std::io;
 use std::ops::Deref;
 use std::rc::Rc;
 use teloc::Resolver;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::{mpsc, RwLock};
+
+use crate::auth::AuthProvider;
+use crate::extensions::ExtensionService;
+use crate::hash::resources::ProfileResources;
+use crate::hash::HashingService;
+use crate::profile::ProfileService;
+use crate::security::SecurityService;
+use crate::LauncherServiceProvider;
 
 pub async fn ws_api(
     req: HttpRequest,
@@ -166,35 +163,15 @@ impl MessageHandle for ProfileResourcesMessage {
                 let hashing_service: Arc<RwLock<HashingService>> = sp.resolve();
                 let hashing_service = hashing_service.read().await;
                 let info = client.client_info.as_ref().unwrap();
-                let files = profile_data
-                    .profile_info
-                    .get_irrelevant_optionals(info, &self.optionals)
-                    .map(Optional::get_files)
-                    .flatten()
-                    .collect::<HashMap<_, _>>();
-                let libraries = get_resource(&hashing_service.libraries, &self.profile)?
-                    .filter_files(files.get(&Location::Libraries));
-                let assets = get_resource(&hashing_service.assets, &profile_data.profile.assets)?
-                    .filter_files(files.get(&Location::Assets));
-
-                let natives = get_resource(
-                    &hashing_service.natives,
-                    &NativeVersion {
-                        version: profile_data.profile.version.clone(),
-                        os_type: self.os_type.clone(),
-                    },
-                )?;
-                let jre = get_resource(&hashing_service.jres, &self.os_type)?;
-                let profile = get_resource(&hashing_service.profiles, &self.profile)?
-                    .filter_files(files.get(&Location::Profile));
-
-                Ok(ServerMessage::ProfileResources(ProfileResourcesResponse {
-                    profile,
-                    libraries,
-                    assets,
-                    natives,
-                    jre,
-                }))
+                hashing_service
+                    .get_resources(info, profile_data, &self.optionals)
+                    .map(|resources| ServerMessage::ProfileResources(resources))
+                    .map_err(|error| {
+                        anyhow::anyhow!(
+                            "Can't get resources, try synchronize profiles: {:?}",
+                            error
+                        )
+                    })
             }
             None => Err(anyhow::anyhow!("This profile doesn't exist!")),
         }
@@ -307,24 +284,5 @@ impl MessageHandle for JoinServerMessage {
                 msg: String::from("Access token error"),
             }))
         }
-    }
-}
-
-fn get_resource<T>(
-    resource: &Option<HashMap<T, RemoteDirectory>>,
-    key: &T,
-) -> Result<RemoteDirectory>
-where
-    T: Eq + Hash,
-{
-    match resource
-        .as_ref()
-        .map(|resource| resource.get(&key))
-        .flatten()
-    {
-        Some(resource) => Ok(resource.to_owned()),
-        None => Err(anyhow::anyhow!(
-            "This profile resource doesn't exist or not synchronized!"
-        )),
     }
 }
