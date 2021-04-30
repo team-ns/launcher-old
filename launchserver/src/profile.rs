@@ -9,8 +9,6 @@ use std::fs::File;
 use std::path::Path;
 use walkdir::{DirEntry, WalkDir};
 
-pub static BLACK_LIST: [&str; 2] = ["profile.json", "description.txt"];
-
 pub struct ProfileService {
     pub profiles_data: HashMap<String, ProfileData>,
 }
@@ -41,7 +39,7 @@ pub fn get_profiles_data() -> HashMap<String, ProfileData> {
         .filter(|e| e.metadata().map(|m| m.is_dir()).unwrap_or(false));
 
     for profile_dir in profile_iter {
-        match get_from_entry::<Profile, _>(&profile_dir.path().join("profile.json")) {
+        match get_from_entry::<Profile, _>(&profile_dir.path().join(".profile.json")) {
             Ok(profile) => {
                 let profile_info = ProfileInfo {
                     name: profile.name.clone(),
@@ -70,7 +68,7 @@ pub fn get_profiles_data() -> HashMap<String, ProfileData> {
 }
 
 fn get_optionals(profile_dir: &DirEntry) -> Vec<Optional> {
-    let path = profile_dir.path().join("optionals.json");
+    let path = profile_dir.path().join(".optionals.json");
     if path.exists() {
         match get_from_entry::<Vec<Optional>, _>(path) {
             Ok(mut optionals) => {
@@ -123,7 +121,7 @@ fn get_from_entry<T: de::DeserializeOwned, P: AsRef<Path>>(path: P) -> Result<T>
 }
 
 fn get_description(profile: &Profile, entry: &DirEntry) -> String {
-    fs::read_to_string(entry.path().join("description.txt")).unwrap_or(format!(
+    fs::read_to_string(entry.path().join(".description.txt")).unwrap_or(format!(
         "Minecraft server\n\
                          Version: {}\n\
                          Name:{}",

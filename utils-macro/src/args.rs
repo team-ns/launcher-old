@@ -3,13 +3,13 @@ use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::{Ident, Lit, Meta, NestedMeta, Result, Token};
 
-pub struct Args {
-    pub vars: Vec<Ident>,
+pub struct Args<T> {
+    pub vars: Vec<T>,
 }
 
-impl Parse for Args {
+impl<T: Parse> Parse for Args<T> {
     fn parse(input: ParseStream) -> Result<Self> {
-        let vars = Punctuated::<Ident, Token![,]>::parse_terminated(input)?;
+        let vars = Punctuated::<T, Token![,]>::parse_terminated(input)?;
         Ok(Args {
             vars: vars.into_iter().collect(),
         })
@@ -21,6 +21,20 @@ pub struct Command;
 impl Command {
     pub fn get_varname(ident: &Ident) -> Ident {
         format_ident!("static_command_for_{}", ident.to_string())
+    }
+}
+
+pub struct Resource;
+
+impl Resource {
+    pub fn get_name(ident: &Ident) -> String {
+        ident
+            .to_string()
+            .split("_")
+            .skip(1)
+            .next()
+            .expect("Failed to parse resource name!")
+            .to_string()
     }
 }
 

@@ -16,12 +16,12 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::JoinError;
 
-const SMALL_SIZE: u64 = 1048576;
-const CHUNK_SIZE: u64 = 512000;
+const SMALL_SIZE: usize = 1048576;
+const CHUNK_SIZE: usize = 512000;
 
 pub async fn download(files: Vec<(String, RemoteFile)>, handler: EventProxy) -> Result<()> {
-    let (progress_sender, mut receiver) = mpsc::unbounded_channel::<u64>();
-    let total_size = files.iter().map(|file| file.1.size).sum::<u64>();
+    let (progress_sender, mut receiver) = mpsc::unbounded_channel::<usize>();
+    let total_size = files.iter().map(|file| file.1.size).sum::<usize>();
     type Download = (Vec<(String, RemoteFile)>, Vec<(String, RemoteFile)>);
     let (concurrent, single): Download = files
         .into_iter()
@@ -86,7 +86,7 @@ pub async fn download(files: Vec<(String, RemoteFile)>, handler: EventProxy) -> 
     Ok(())
 }
 
-fn get_chunks(file_size: u64) -> Vec<(u64, u64)> {
+fn get_chunks(file_size: usize) -> Vec<(usize, usize)> {
     let mut chunks = Vec::new();
     let chunk_num = file_size / CHUNK_SIZE;
 
@@ -104,7 +104,7 @@ fn get_chunks(file_size: u64) -> Vec<(u64, u64)> {
 pub async fn concurrent_download(
     remote_file: RemoteFile,
     path: String,
-    progress_sender: UnboundedSender<u64>,
+    progress_sender: UnboundedSender<usize>,
 ) -> Result<()> {
     let (sender, mut receiver) = mpsc::unbounded_channel();
     let total_size = remote_file.size;
@@ -131,7 +131,7 @@ pub async fn concurrent_download(
                     while let Some(chunk) = resp.data().await {
                         let chunk = chunk?;
                         sender.send((start_offset, chunk.clone()))?;
-                        start_offset += chunk.len() as u64;
+                        start_offset += chunk.len();
                     }
                     Ok(())
                 } else {
@@ -151,10 +151,10 @@ pub async fn concurrent_download(
                 return Ok(());
             }
             let chunk = receiver.recv().await.with_context(|| "Incorrect chunk")?;
-            file.seek(SeekFrom::Start(chunk.0)).await?;
+            file.seek(SeekFrom::Start(chunk.0 as u64)).await?;
             file.write_all(&chunk.1).await?;
-            receive_size += chunk.1.len() as u64;
-            progress_sender.send(chunk.1.len() as u64)?;
+            receive_size += chunk.1.len();
+            progress_sender.send(chunk.1.len())?;
         }
     }));
     join_tasks(tasks).await
@@ -163,7 +163,7 @@ pub async fn concurrent_download(
 async fn single_thread_download(
     remote_file: RemoteFile,
     path: String,
-    progress_sender: UnboundedSender<u64>,
+    progress_sender: UnboundedSender<usize>,
 ) -> Result<()> {
     tokio::spawn(async move {
         let mut file = create_file(Path::new(&path)).await?;
@@ -173,7 +173,7 @@ async fn single_thread_download(
             while let Some(chunk) = resp.data().await {
                 let bytes = &chunk?;
                 file.write_all(bytes).await?;
-                progress_sender.send(bytes.len() as u64)?;
+                progress_sender.send(bytes.len())?;
             }
             Ok(())
         } else {

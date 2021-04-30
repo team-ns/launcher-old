@@ -30,7 +30,6 @@ pub struct FileAction {
 pub enum Location {
     Profile,
     Libraries,
-    Assets,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -112,22 +111,14 @@ impl Optional {
     pub fn relevant(&self, client_info: &ClientInfo, selected: &[String]) -> bool {
         self.apply(client_info) && (!self.visible || selected.contains(self.name.as_ref().unwrap()))
     }
-
-    pub fn get_files(&self) -> HashMap<&Location, OptionalFiles> {
-        let mut map = HashMap::new();
-        for action in self.actions.iter().filter_map(|action| match action {
-            Action::Files(files) => Some(files),
-            _ => None,
-        }) {
-            let entry = map
-                .entry(&action.location)
-                .or_insert_with(OptionalFiles::default);
-            entry
-                .original_paths
-                .append(&mut action.files.original_paths.clone());
-            entry.rename_paths.extend(action.files.rename_paths.clone());
-        }
-        map
+    pub fn get_files(&self) -> impl Iterator<Item = (Location, OptionalFiles)> {
+        self.actions
+            .clone()
+            .into_iter()
+            .filter_map(|action| match action {
+                Action::Files(files) => Some((files.location, files.files)),
+                _ => None,
+            })
     }
 
     pub fn get_paths(&self) -> impl Iterator<Item = (&PathBuf, &PathBuf)> {

@@ -1,18 +1,19 @@
 use crate::optional::OptionalFiles;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use std::path::PathBuf;
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct HashedFile {
-    pub size: u64,
+    pub size: usize,
     pub checksum: u128,
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 pub struct RemoteFile {
     pub uri: String,
-    pub size: u64,
+    pub size: usize,
     pub checksum: u128,
 }
 
@@ -25,18 +26,33 @@ impl PartialEq<RemoteFile> for HashedFile {
 pub type RemoteDirectory = HashMap<PathBuf, RemoteFile>;
 
 pub trait RemoteDirectoryExt {
-    fn filter_files(self, files: Option<&OptionalFiles>) -> Self;
+    fn filter_files(
+        self,
+        files: (Option<&Vec<OptionalFiles>>, Option<&Vec<OptionalFiles>>),
+    ) -> Self;
 }
 
 impl RemoteDirectoryExt for RemoteDirectory {
-    fn filter_files(mut self, files: Option<&OptionalFiles>) -> Self {
-        if let Some(files) = files {
-            for path in &files.original_paths {
-                self.remove(path);
+    fn filter_files(
+        mut self,
+        files: (Option<&Vec<OptionalFiles>>, Option<&Vec<OptionalFiles>>),
+    ) -> Self {
+        if let Some(irrelevant_files) = files.0 {
+            for optional_files in irrelevant_files {
+                for path in &optional_files.original_paths {
+                    self.remove(path);
+                }
+                for path in &optional_files.rename_paths {
+                    self.remove(path.0);
+                }
             }
-            for path in &files.rename_paths {
-                if let Some(file) = self.remove(path.0) {
-                    self.insert(PathBuf::from(path.1), file);
+        }
+        if let Some(relevant_files) = files.0 {
+            for optional_files in relevant_files {
+                for path in &optional_files.rename_paths {
+                    if let Some(file) = self.remove(path.0) {
+                        self.insert(PathBuf::from(path.1), file);
+                    }
                 }
             }
         }
@@ -51,6 +67,12 @@ pub enum OsType {
     MacOsX64,
     WindowsX64,
     WindowsX32,
+}
+
+impl fmt::Display for OsType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug)]
