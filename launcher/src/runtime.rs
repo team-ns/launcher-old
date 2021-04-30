@@ -46,7 +46,8 @@ pub async fn start() {
         let (mut webview, event_loop) = match create_webview(tx.clone()) {
             Ok(w) => w,
             Err(e) => {
-                if cfg!(windows) {
+                #[cfg(target_os = "windows")]
+                {
                     match e.downcast::<WVError>() {
                         Err(e) => {
                             panic!("{}", e)
@@ -61,7 +62,9 @@ pub async fn start() {
                         }
                         Ok(e) => panic!("{:?}", e),
                     }
-                } else {
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
                     panic!("{}", e)
                 }
             }

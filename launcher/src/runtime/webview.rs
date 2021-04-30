@@ -24,7 +24,7 @@ pub fn create_webview(
 ) -> Result<(WebView, EventLoop<WebviewEvent>)> {
     use wry::{application::window::WindowBuilder, webview::WebViewBuilder};
 
-    let event_loop = new_event_loop();
+    let event_loop = create_event_loop();
     let window = WindowBuilder::new()
         .with_decorations(true)
         .with_title(&CONFIG.project_name)
@@ -45,18 +45,12 @@ pub fn create_webview(
 
 #[cfg(feature = "bundle")]
 fn get_runtime() -> Vec<u8> {
-    Ok(include_crypt!(AES, "runtime/index.html").decrypt())
+    include_crypt!(AES, "runtime/index.html").decrypt()
 }
 
 #[cfg(not(feature = "bundle"))]
 fn get_runtime() -> Vec<u8> {
     fs::read("runtime/index.html").expect("Can't read lazy runtime file")
-}
-
-#[cfg(windows)]
-fn new_event_loop<T>() -> EventLoop<T> {
-    use wry::application::platform::windows::EventLoopExtWindows;
-    EventLoop::new_any_thread()
 }
 
 #[cfg(windows)]
@@ -79,8 +73,19 @@ pub fn download_webview2() {
         .expect("Can't run installer");
 }
 
-#[cfg(unix)]
-fn new_event_loop<T>() -> EventLoop<T> {
-    use wry::application::platform::unix::EventLoopExtUnix;
-    EventLoop::new_any_thread()
+fn create_event_loop() -> EventLoop<WebviewEvent> {
+    #[cfg(target_os = "linux")]
+    {
+        use wry::application::platform::unix::EventLoopExtUnix;
+        EventLoop::<WebviewEvent>::new_any_thread()
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use wry::application::platform::windows::EventLoopExtWindows;
+        EventLoop::<WebviewEvent>::new_any_thread()
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "linux")))]
+    {
+        EventLoop::<WebviewEvent>::with_user_event()
+    }
 }
