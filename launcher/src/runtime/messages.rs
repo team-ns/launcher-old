@@ -17,15 +17,15 @@ use crate::config::{Settings, SETTINGS};
 use nfd2::Response;
 use path_slash::PathBufExt;
 
+use crate::runtime::webview::{EventProxy, WebviewEvent};
 use crate::security::validation::get_os_type;
 use launcher_api::validation::ClientInfo;
 use notify::EventKind;
 use std::{env, fs};
 use sysinfo::SystemExt;
 use tokio::sync::mpsc::UnboundedSender;
-use web_view::Handle;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum RuntimeMessage {
     Ready,
@@ -47,7 +47,7 @@ pub async fn login_user(
     client: &mut Client,
     login: &str,
     password: &str,
-    handler: Handle<()>,
+    handler: EventProxy,
 ) -> Result<()> {
     let response = client.auth(login, password).await?;
     client.auth_info = Some(AuthInfo {
@@ -57,17 +57,14 @@ pub async fn login_user(
     });
     let profiles = client.get_profiles().await?;
     let json = serde_json::to_string(&profiles.profiles_info)?;
-    handler.dispatch(move |w| {
-        w.eval(&format!(
-            r#"app.backend.logined('{}')"#,
-            json.replace(r#"""#, r#"""#)
-        ))?;
-        Ok(())
-    })?;
+    handler.send_event(WebviewEvent::DispatchScript(format!(
+        "app.backend.logined(`{}`)",
+        json
+    )))?;
     Ok(())
 }
 
-pub async fn ready(handler: Handle<()>, sender: UnboundedSender<String>) -> Result<()> {
+pub async fn ready(handler: EventProxy, sender: UnboundedSender<String>) -> Result<()> {
     match Client::new(sender).await {
         Ok(mut c) => {
             let client_info = ClientInfo {
@@ -79,7 +76,8 @@ pub async fn ready(handler: Handle<()>, sender: UnboundedSender<String>) -> Resu
                 .map_err(|_| anyhow::anyhow!("Can't update client"))?;
             let settings = match Settings::load() {
                 Ok(s) => s,
-                Err(_e) => {
+                Err(e) => {
+                    log::debug!("Settings error: {}", e);
                     let s = Settings::default();
                     s.save()?;
                     s
@@ -88,12 +86,14 @@ pub async fn ready(handler: Handle<()>, sender: UnboundedSender<String>) -> Resu
             SETTINGS
                 .set(Arc::new(Mutex::new(settings.clone())))
                 .expect("Can't update settings");
-            update_settings(&settings, handler.clone()).await?;
+            let settings_handler = handler.clone();
+            update_settings(&settings, settings_handler).await?;
             if settings.save_data {
                 let login = &settings.last_name.expect("Can't get login");
                 let password = &settings.saved_password.expect("Can't get saved password");
                 let mut client = CLIENT.get().expect("Can't get client").lock().await;
-                let login_result = login_user(&mut client, login, password, handler.clone()).await;
+                let login_handler = handler.clone();
+                let login_result = login_user(&mut client, login, password, login_handler).await;
                 if login_result.is_err() {
                     let mut current_settings =
                         SETTINGS.get().expect("Can't take settings").lock().await;
@@ -107,24 +107,18 @@ pub async fn ready(handler: Handle<()>, sender: UnboundedSender<String>) -> Resu
             let mut system = sysinfo::System::new_all();
             system.refresh_all();
             let max_ram = system.get_total_memory() / 1024;
-            handler.dispatch(move |w| {
-                w.eval(&format!("app.backend.ready({})", max_ram))?;
-                Ok(())
-            })?;
+            handler.send_event(WebviewEvent::DispatchScript(format!(
+                "app.backend.ready({})",
+                max_ram
+            )))?;
         }
         Err(e) => {
-            handler.dispatch(move |w| {
-                w.eval(&format!(
-                    r#"app.backend.error("{}")"#,
-                    e.to_string().replace(r#"""#, r#"""#)
-                ))?;
-                Ok(())
-            })?;
+            handler.send_event(WebviewEvent::DispatchScript(format!(
+                r#"app.backend.error("{}")"#,
+                e.to_string().replace(r#"""#, r#"""#)
+            )))?;
             tokio::time::sleep(Duration::from_secs(10)).await;
-            handler.dispatch(move |w| {
-                w.exit();
-                Ok(())
-            })?;
+            handler.send_event(WebviewEvent::Exit)?;
         }
     }
     Ok(())
@@ -135,11 +129,12 @@ pub async fn login(
     password: String,
     remember: bool,
     socket: Arc<Mutex<Client>>,
-    handler: Handle<()>,
+    handler: EventProxy,
 ) -> Result<()> {
     let mut client = socket.lock().await;
     let password = client.get_encrypted_password(&password).await;
-    login_user(&mut client, &login, &password, handler.clone()).await?;
+    let handler = handler.clone();
+    login_user(&mut client, &login, &password, handler).await?;
     let mut current_settings = SETTINGS.get().expect("Can't take settings").lock().await;
     if remember {
         current_settings.last_name = Some(login.clone());
@@ -167,27 +162,33 @@ pub async fn logout(client: Arc<Mutex<Client>>) -> Result<()> {
 }
 
 pub async fn start_client(
-    handler: Handle<()>,
+    handler: EventProxy,
     socket: Arc<Mutex<Client>>,
     profile: String,
 ) -> Result<()> {
-    let mut client = socket.lock().await;
     let optionals = SETTINGS
         .get()
         .expect("Can't get settings")
         .lock()
         .await
         .get_optionals(&profile);
-    let resources = client.get_resources(&profile, optionals.clone()).await?;
+    let (resources, profile, auth_info) = {
+        let mut client = socket.lock().await;
+        let resources = client.get_resources(&profile, optionals.clone()).await?;
+        let profile = client.get_profile(&profile, optionals).await?.profile;
+        let auth_info = client.auth_info.clone();
+        (resources, profile, auth_info)
+    };
+    let (game_dir, ram) = {
+        let settings = SETTINGS.get().expect("Can't get settings").lock().await;
+        let game_dir = settings.game_dir.clone();
+        let ram = settings.ram;
+        (game_dir, ram)
+    };
     let remote_directory = validation::new_remote_directory(resources);
-    let settings = SETTINGS.get().expect("Can't get settings").lock().await;
-    let game_dir = settings.game_dir.clone();
-    let ram = settings.ram;
-    let profile = client.get_profile(&profile, optionals).await?.profile;
+    let validate_handler = handler.clone();
     let watcher =
-        validation::validate_profile(&profile, &remote_directory, handler.clone()).await?;
-    let auth_info = client.auth_info.clone();
-    drop(client);
+        validation::validate_profile(&profile, &remote_directory, validate_handler).await?;
     PLAYING.set(()).expect("Can't set playing status");
     let jvm = game::create_jvm(profile.clone(), &game_dir, ram)?;
     let watcher_handle: tokio::task::JoinHandle<Result<()>> =
@@ -212,10 +213,7 @@ pub async fn start_client(
         });
     let game_handle = tokio::task::spawn_blocking(move || {
         if let Some(info) = auth_info {
-            handler.dispatch(|w| {
-                w.exit();
-                Ok(())
-            })?;
+            handler.send_event(WebviewEvent::HideWindow)?;
             game::start(jvm, profile, info, &game_dir)?;
         } else {
             return Err(anyhow::anyhow!("Start game before auth!"));
@@ -225,8 +223,11 @@ pub async fn start_client(
     let join_handle = tokio::spawn(async {
         loop {
             let (token, profile, server) = CHANNEL_GET.1.lock().unwrap().recv().unwrap();
-            let mut client = CLIENT.get().unwrap().lock().await;
-            match client.join(&token, &profile, &server).await {
+            let join_result = {
+                let mut client = CLIENT.get().unwrap().lock().await;
+                client.join(&token, &profile, &server).await
+            };
+            match join_result {
                 Err(e) => CHANNEL_SEND.0.lock().unwrap().send(format!("{}", e)),
                 _ => CHANNEL_SEND.0.lock().unwrap().send("".to_string()),
             }
@@ -249,7 +250,7 @@ pub async fn start_client(
     Ok(())
 }
 
-pub async fn select_game_dir(handler: Handle<()>) -> Result<()> {
+pub async fn select_game_dir(handler: EventProxy) -> Result<()> {
     let mut current_settings = SETTINGS
         .get()
         .expect("Can't take settings")
@@ -264,7 +265,7 @@ pub async fn select_game_dir(handler: Handle<()>) -> Result<()> {
     Ok(())
 }
 
-pub async fn save_settings(settings: Settings, handler: Handle<()>) -> Result<()> {
+pub async fn save_settings(settings: Settings, handler: EventProxy) -> Result<()> {
     settings.save()?;
     update_settings(&settings, handler).await?;
     let mut current_settings = SETTINGS.get().expect("Can't take settings").lock().await;
@@ -272,17 +273,14 @@ pub async fn save_settings(settings: Settings, handler: Handle<()>) -> Result<()
     Ok(())
 }
 
-pub async fn update_settings(settings: &Settings, handler: Handle<()>) -> Result<()> {
+pub async fn update_settings(settings: &Settings, handler: EventProxy) -> Result<()> {
     let settings = settings.clone();
     fs::create_dir_all(&settings.game_dir)?;
     env::set_current_dir(&settings.game_dir)?;
     let json = serde_json::to_string(&settings)?;
-    handler.dispatch(move |w| {
-        w.eval(&format!(
-            r#"app.backend.settings('{}')"#,
-            json.replace(r#"""#, r#"""#)
-        ))?;
-        Ok(())
-    })?;
+    handler.send_event(WebviewEvent::DispatchScript(format!(
+        r#"app.backend.settings('{}')"#,
+        json.replace(r#"""#, r#"""#)
+    )))?;
     Ok(())
 }

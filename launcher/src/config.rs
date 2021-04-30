@@ -1,8 +1,10 @@
 use anyhow::Result;
+
 use launcher_api::config::Configurable;
 use once_cell::sync::{Lazy, OnceCell};
 use path_slash::PathExt;
 use serde::{Deserialize, Serialize};
+
 use std::collections::HashMap;
 use std::io::Write;
 use std::sync::Arc;
@@ -25,14 +27,25 @@ pub struct Config {
 impl Configurable for Config {}
 
 impl Default for Config {
+    #[cfg(feature = "bundle")]
     fn default() -> Self {
-        let config_json = obfstr::obfstr!(include_str!("../config.json"))
+        let config_json = include_crypt!("config.json")
+            .decrypt_str()
+            .expect("Can't decode configuration")
+            .replace("%homeDir%", &dirs::home_dir().unwrap().to_slash_lossy());
+        serde_json::from_str(&config_json).unwrap()
+    }
+
+    #[cfg(not(feature = "bundle"))]
+    fn default() -> Self {
+        let config_json = fs::read_to_string("config.json")
+            .expect("Can't decode configuration")
             .replace("%homeDir%", &dirs::home_dir().unwrap().to_slash_lossy());
         serde_json::from_str(&config_json).unwrap()
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
     pub game_dir: String,
@@ -41,6 +54,7 @@ pub struct Settings {
     pub saved_password: Option<String>,
     pub last_name: Option<String>,
     pub optionals: HashMap<String, Vec<String>>,
+    pub properties: HashMap<String, String>,
 }
 
 impl Settings {
@@ -80,6 +94,7 @@ impl Default for Settings {
             saved_password: None,
             last_name: None,
             optionals: Default::default(),
+            properties: Default::default(),
         }
     }
 }

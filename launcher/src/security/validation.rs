@@ -1,4 +1,5 @@
 use crate::client::downloader;
+use crate::runtime::webview::{EventProxy, WebviewEvent};
 use crate::security::watcher::WatcherService;
 use anyhow::Result;
 use launcher_api::message::ProfileResourcesResponse;
@@ -9,7 +10,6 @@ use path_slash::PathExt;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use web_view::Handle;
 
 pub enum ValidationStatus {
     Success,
@@ -51,15 +51,14 @@ pub fn create_hashed_file<P: AsRef<Path>>(path: P) -> Result<HashedFile> {
 pub async fn validate_profile(
     profile: &Profile,
     files: &RemoteDirectory,
-    handler: Handle<()>,
+    handler: EventProxy,
 ) -> Result<WatcherService> {
     let verify = &profile.update_verify;
     let exclude = &profile.update_exclusion;
 
-    handler.dispatch(move |w| {
-        w.eval("app.backend.download.wait()")?;
-        Ok(())
-    })?;
+    handler.send_event(WebviewEvent::DispatchScript(
+        "app.backend.download.wait()".to_string(),
+    ))?;
     if let ValidationStatus::NeedUpdate(files_to_update, file_to_remove) =
         validate(&files, verify, exclude)
     {

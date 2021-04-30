@@ -1,17 +1,25 @@
 use ecies_ed25519::PublicKey;
-use lazy_static_include::lazy_static_include_bytes;
+
 use rand::rngs::OsRng;
 
 pub mod validation;
 mod watcher;
 
-lazy_static_include_bytes! {
-    PUBLIC_KEY => "../public_key"
-}
-
+#[cfg(feature = "bundle")]
 pub fn get_manager() -> SecurityManager {
     SecurityManager {
-        public_key: PublicKey::from_bytes(*PUBLIC_KEY).unwrap(),
+        public_key: PublicKey::from_bytes(&include_crypt!("public_key").decrypt()).unwrap(),
+    }
+}
+
+#[cfg(not(feature = "bundle"))]
+pub fn get_manager() -> SecurityManager {
+    use std::fs;
+    SecurityManager {
+        public_key: PublicKey::from_bytes(
+            &fs::read("public_key").expect("Can't read public key file"),
+        )
+        .unwrap(),
     }
 }
 

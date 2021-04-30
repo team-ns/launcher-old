@@ -4,6 +4,7 @@ use hyper::body::HttpBody;
 use hyper::{Body, Client, Request, Uri};
 use hyper_tls::HttpsConnector;
 
+use crate::runtime::webview::{EventProxy, WebviewEvent};
 use futures::Future;
 use launcher_api::validation::RemoteFile;
 use std::fs;
@@ -14,12 +15,11 @@ use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::JoinError;
-use web_view::Handle;
 
 const SMALL_SIZE: u64 = 1048576;
 const CHUNK_SIZE: u64 = 512000;
 
-pub async fn download(files: Vec<(String, RemoteFile)>, handler: Handle<()>) -> Result<()> {
+pub async fn download(files: Vec<(String, RemoteFile)>, handler: EventProxy) -> Result<()> {
     let (progress_sender, mut receiver) = mpsc::unbounded_channel::<u64>();
     let total_size = files.iter().map(|file| file.1.size).sum::<u64>();
     type Download = (Vec<(String, RemoteFile)>, Vec<(String, RemoteFile)>);
@@ -41,19 +41,15 @@ pub async fn download(files: Vec<(String, RemoteFile)>, handler: Handle<()>) -> 
         #[allow(unused_must_use)]
         async move {
             let mut receive_size = 0;
-            handler.dispatch(move |w| {
-                w.eval(&format!(
-                    "app.backend.download.setTotalSize('{}')",
-                    total_size
-                ))?;
-                Ok(())
-            });
+            handler.send_event(WebviewEvent::DispatchScript(format!(
+                "app.backend.download.setTotalSize('{}')",
+                total_size
+            )));
             loop {
                 if total_size == receive_size {
-                    handler.dispatch(move |w| {
-                        w.eval("app.backend.download.wait()")?;
-                        Ok(())
-                    });
+                    handler.send_event(WebviewEvent::DispatchScript(
+                        "app.backend.download.wait()".to_string(),
+                    ));
                     return;
                 }
                 match receiver
@@ -63,19 +59,16 @@ pub async fn download(files: Vec<(String, RemoteFile)>, handler: Handle<()>) -> 
                 {
                     Ok(size) => {
                         receive_size += size;
-                        handler.dispatch(move |w| {
-                            w.eval(&format!(
-                                "app.backend.download.updateSize('{}')",
-                                receive_size
-                            ))?;
-                            Ok(())
-                        });
+                        handler.send_event(WebviewEvent::DispatchScript(format!(
+                            "app.backend.download.updateSize('{}')",
+                            receive_size
+                        )));
                     }
                     Err(error) => {
-                        handler.dispatch(move |w| {
-                            w.eval(&format!("app.backend.error('{}')", error))?;
-                            Ok(())
-                        });
+                        handler.send_event(WebviewEvent::DispatchScript(format!(
+                            "app.backend.error('{}')",
+                            error
+                        )));
                         return;
                     }
                 }

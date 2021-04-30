@@ -1,7 +1,6 @@
 use crate::validation::{ClientInfo, OsType};
 use serde::{Deserialize, Serialize};
 
-use std::collections::hash_map::Iter;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
