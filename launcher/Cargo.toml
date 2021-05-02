@@ -34,7 +34,7 @@ bincode = "1.3"
 nfd2 = "0.2"
 t1ha = "0.1.0"
 sysinfo = "0.15"
-wry = "0.9"
+wry = { git = "https://github.com/team-ns/wry", branch = "release" }
 include-crypt = "0.1.0"
 
 

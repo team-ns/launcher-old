@@ -4,7 +4,6 @@ use crate::runtime::messages::RuntimeMessage;
 use anyhow::Result;
 
 use std::fs;
-use std::io::Write;
 use tokio::sync::mpsc::UnboundedSender;
 use wry::application::dpi::PhysicalSize;
 use wry::application::event_loop::{EventLoop, EventLoopProxy};
@@ -12,7 +11,7 @@ use wry::webview::WebView;
 
 pub type EventProxy = EventLoopProxy<WebviewEvent>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum WebviewEvent {
     DispatchScript(String),
     HideWindow,
@@ -55,6 +54,7 @@ fn get_runtime() -> Vec<u8> {
 
 #[cfg(windows)]
 pub fn download_webview2() {
+    use std::io::Write;
     let installer = minreq::get("https://go.microsoft.com/fwlink/p/?LinkId=2124703")
         .send()
         .unwrap();
@@ -76,7 +76,6 @@ pub fn download_webview2() {
 fn create_event_loop() -> EventLoop<WebviewEvent> {
     #[cfg(target_os = "linux")]
     {
-        use wry::application::platform::unix::EventLoopExtUnix;
         EventLoop::<WebviewEvent>::new_any_thread()
     }
     #[cfg(target_os = "windows")]

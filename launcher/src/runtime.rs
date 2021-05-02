@@ -14,7 +14,7 @@ use wry::application::event::{Event, WindowEvent};
 use wry::application::event_loop::ControlFlow;
 use wry::application::window::Window;
 use wry::webview::{RpcRequest, RpcResponse};
-use wry::{Error as WVError, Value};
+use wry::Value;
 
 mod messages;
 pub mod webview;
@@ -48,6 +48,7 @@ pub async fn start() {
             Err(e) => {
                 #[cfg(target_os = "windows")]
                 {
+                    use wry::Error as WVError;
                     match e.downcast::<WVError>() {
                         Err(e) => {
                             panic!("{}", e)
