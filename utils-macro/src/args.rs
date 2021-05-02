@@ -30,9 +30,8 @@ impl Resource {
     pub fn get_name(ident: &Ident) -> String {
         ident
             .to_string()
-            .split("_")
-            .skip(1)
-            .next()
+            .split('_')
+            .nth(1)
             .expect("Failed to parse resource name!")
             .to_string()
     }

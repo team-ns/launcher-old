@@ -165,7 +165,7 @@ impl MessageHandle for ProfileResourcesMessage {
                 let info = client.client_info.as_ref().unwrap();
                 hashing_service
                     .get_resources(info, profile_data, &self.optionals)
-                    .map(|resources| ServerMessage::ProfileResources(resources))
+                    .map(ServerMessage::ProfileResources)
                     .map_err(|error| {
                         anyhow::anyhow!(
                             "Can't get resources, try synchronize profiles: {:?}",
