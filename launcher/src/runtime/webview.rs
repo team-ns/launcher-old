@@ -1,4 +1,4 @@
-use crate::config::CONFIG;
+use crate::config::BUNDLE;
 use crate::runtime::invoke_handler;
 use crate::runtime::messages::RuntimeMessage;
 use anyhow::Result;
@@ -25,10 +25,11 @@ pub fn create_webview(
 
     let event_loop = create_event_loop();
     let window = WindowBuilder::new()
-        .with_decorations(true)
-        .with_title(&CONFIG.project_name)
-        .with_resizable(false)
-        .with_inner_size(PhysicalSize::new(1000, 600))
+        .with_decorations(!BUNDLE.window.frameless)
+        .with_title(&BUNDLE.project_name)
+        .with_resizable(BUNDLE.window.resizable)
+        .with_transparent(BUNDLE.window.transparent)
+        .with_inner_size(PhysicalSize::new(BUNDLE.window.width, BUNDLE.window.height))
         .build(&event_loop)
         .unwrap();
 

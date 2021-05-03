@@ -8,7 +8,7 @@ mod watcher;
 #[cfg(feature = "bundle")]
 pub fn get_manager() -> SecurityManager {
     SecurityManager {
-        public_key: PublicKey::from_bytes(&include_crypt!("public_key").decrypt()).unwrap(),
+        public_key: PublicKey::from_bytes(&crate::config::BUNDLE.public_key).unwrap(),
     }
 }
 

@@ -7,6 +7,7 @@ use crate::auth::accept::AcceptAuthProvider;
 use crate::auth::json::JsonAuthProvider;
 use crate::auth::sql::SqlAuthProvider;
 use crate::auth::AuthProvider;
+use launcher_api::bundle::Window;
 use std::clone::Clone;
 use std::path::Path;
 
@@ -23,6 +24,15 @@ pub struct Config {
     pub websocket_url: String,
     pub project_name: String,
     pub workers: usize,
+    pub runtime: RuntimeConfig,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeConfig {
+    pub window: Window,
+    pub game_dir: String,
+    pub ram: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -73,6 +83,17 @@ impl Default for Config {
             websocket_url: "ws://127.0.0.1:8080".to_string(),
             project_name: "NSL".to_string(),
             workers: 4,
+            runtime: RuntimeConfig {
+                window: Window {
+                    frameless: false,
+                    resizable: false,
+                    transparent: false,
+                    width: 1000,
+                    height: 600,
+                },
+                game_dir: "%homeDir%/.launcher".to_string(),
+                ram: 1024,
+            },
         }
     }
 }

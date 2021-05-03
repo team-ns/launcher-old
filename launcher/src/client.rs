@@ -9,7 +9,7 @@ use launcher_api::message::{Error, ProfileResourcesMessage, ProfileResourcesResp
 
 use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 
-use crate::config::CONFIG;
+use crate::config::BUNDLE;
 
 use crate::security;
 use crate::security::validation::get_os_type;
@@ -38,7 +38,7 @@ pub struct AuthInfo {
 
 impl Client {
     pub async fn new(runtime_sender: UnboundedSender<String>) -> Result<Self> {
-        let address: &str = &CONFIG.websocket;
+        let address: &str = &BUNDLE.websocket;
         let (sender, mut receiver) = Client::connect(&address).await?;
         let requests: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ServerMessage>>>> =
             Default::default();

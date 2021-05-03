@@ -11,3 +11,7 @@ Cargo.lock
 
 /app/
 
+config.json
+
+public_key
+

@@ -1,19 +1,24 @@
 use crate::auth::AuthProvider;
+use crate::config::Config;
 use crate::extensions::ExtensionService;
 use crate::profile::ProfileService;
+use crate::security::SecurityService;
 use crate::{hash, profile, LauncherServiceProvider};
 use anyhow::Result;
+use ecies_ed25519::PublicKey;
 use futures::future::BoxFuture;
 use futures::FutureExt;
+use launcher_api::bundle::LauncherBundle;
 use launcher_extension_api::command::ExtensionCommand;
 use launcher_macro::{command, register_commands};
-use log::info;
+use log::{error, info};
 use rustyline::completion::{extract_word, Completer};
 use rustyline::error::ReadlineError;
 use rustyline::Config as LineConfig;
 use rustyline::{CompletionType, Context, EditMode, Editor, OutputStreamType};
 use rustyline_derive::{Helper, Highlighter, Hinter, Validator};
 use std::collections::HashMap;
+use std::fs;
 use std::process::exit;
 use std::sync::Arc;
 use teloc::Resolver;
@@ -125,7 +130,7 @@ pub async fn run(server: Arc<LauncherServiceProvider>) -> Result<()> {
             .build();
         let mut rl: Editor<CommandHelper> = Editor::with_config(rl_config);
         let mut helper = CommandHelper::new(server);
-        register_commands!(rehash, sync, auth);
+        register_commands!(rehash, sync, auth, bundle);
         rl.set_helper(Some(helper));
         loop {
             let readline = rl.readline("");
@@ -177,4 +182,36 @@ pub async fn auth(sp: Arc<LauncherServiceProvider>, args: &[&str]) {
             Err(error) => info!("Failed to auth: {}", error),
         }
     }
+}
+
+#[command(description = "Generate bundle file for launcher")]
+pub async fn bundle(sp: Arc<LauncherServiceProvider>, _args: &[&str]) {
+    info!("Start generate bundle for launcher...");
+    let config: &Config = sp.resolve();
+    let security_service: &SecurityService = sp.resolve();
+    let public_key = PublicKey::from_secret(&security_service.secret_key);
+    let bundle = LauncherBundle {
+        game_dir: config.runtime.game_dir.clone(),
+        websocket: config.websocket_url.clone(),
+        ram: config.runtime.ram,
+        project_name: config.project_name.clone(),
+        public_key: public_key.to_bytes(),
+        window: config.runtime.window.clone(),
+    };
+    let bundle_file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open("bundle.bin");
+    match bundle_file {
+        Ok(f) => {
+            if let Err(e) = bincode::serialize_into(f, &bundle) {
+                error!("Can't generate bundle file: {}", e);
+            } else {
+                info!("Bundle generated");
+            }
+        }
+        Err(e) => {
+            error!("Can't create bundle file: {}", e)
+        }
+    };
 }
