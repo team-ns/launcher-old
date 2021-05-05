@@ -1,13 +1,12 @@
-use crate::config::BUNDLE;
-use crate::runtime::invoke_handler;
-use crate::runtime::messages::RuntimeMessage;
 use anyhow::Result;
-
-use std::fs;
 use tokio::sync::mpsc::UnboundedSender;
 use wry::application::dpi::PhysicalSize;
 use wry::application::event_loop::{EventLoop, EventLoopProxy};
 use wry::webview::WebView;
+
+use crate::config::BUNDLE;
+use crate::runtime::invoke_handler;
+use crate::runtime::messages::RuntimeMessage;
 
 pub type EventProxy = EventLoopProxy<WebviewEvent>;
 
@@ -45,16 +44,18 @@ pub fn create_webview(
 
 #[cfg(feature = "bundle")]
 fn get_runtime() -> Vec<u8> {
-    include_crypt!(AES, "runtime/index.html").decrypt()
+    include_crypt::include_crypt!(AES, "runtime/index.html").decrypt()
 }
 
 #[cfg(not(feature = "bundle"))]
 fn get_runtime() -> Vec<u8> {
+    use std::fs;
     fs::read("runtime/index.html").expect("Can't read lazy runtime file")
 }
 
 #[cfg(windows)]
 pub fn download_webview2() {
+    use std::fs;
     use std::io::Write;
     let installer = minreq::get("https://go.microsoft.com/fwlink/p/?LinkId=2124703")
         .send()
