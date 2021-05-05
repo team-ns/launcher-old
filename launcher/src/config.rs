@@ -5,9 +5,11 @@ use once_cell::sync::{Lazy, OnceCell};
 use path_slash::PathExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
+use std::fs::File;
 use std::io::Write;
+use std::path::Path;
 use std::sync::Arc;
-use std::{fs, path};
 use tokio::sync::Mutex;
 
 pub static BUNDLE: Lazy<LauncherBundle> = Lazy::new(load_bundle);
@@ -50,15 +52,16 @@ pub struct Settings {
 
 impl Settings {
     pub fn load() -> Result<Self> {
-        let path = path::Path::new(&BUNDLE.game_dir).join("settings.bin");
+        let path = Path::new(&BUNDLE.game_dir).join("settings.bin");
+        fs::create_dir_all(path.parent().unwrap())?;
         let settings = bincode::deserialize::<Self>(&fs::read(path)?)?;
         Ok(settings)
     }
 
     pub fn save(&self) -> Result<()> {
         let body = bincode::serialize(self)?;
-        let path = path::Path::new(&BUNDLE.game_dir).join("settings.bin");
-        let mut file = fs::File::create(path)?;
+        let path = Path::new(&BUNDLE.game_dir).join("settings.bin");
+        let mut file = File::create(path)?;
         file.write_all(&body)?;
         Ok(())
     }
