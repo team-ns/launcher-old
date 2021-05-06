@@ -1,9 +1,3 @@
-use crate::auth::AuthProvider;
-use crate::config::Config;
-use crate::extensions::ExtensionService;
-use crate::profile::ProfileService;
-use crate::security::SecurityService;
-use crate::{hash, profile, LauncherServiceProvider};
 use anyhow::Result;
 use ecies_ed25519::PublicKey;
 use futures::future::BoxFuture;
@@ -23,6 +17,13 @@ use std::process::exit;
 use std::sync::Arc;
 use teloc::Resolver;
 use tokio::sync::RwLock;
+
+use crate::auth::AuthProvider;
+use crate::config::Config;
+use crate::extensions::ExtensionService;
+use crate::profile::ProfileService;
+use crate::security::SecurityService;
+use crate::{hash, profile, LauncherServiceProvider};
 
 type CmdFn = for<'a> fn(Arc<LauncherServiceProvider>, &'a [&str]) -> BoxFuture<'a, ()>;
 
@@ -49,9 +50,15 @@ impl Completer for CommandHelper {
         _ctx: &Context,
     ) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
         let (word_start, _) = extract_word(line, pos, None, &[32u8][..]);
-        let results = self
-            .commands
-            .keys()
+        let commands = self.commands.keys().copied();
+        let extension_commands = self
+            .extension_commands
+            .values()
+            .map(|commands| commands.keys())
+            .flatten()
+            .map(|cmd| cmd.as_str());
+        let results = commands
+            .chain(extension_commands)
             .filter_map(|cmd| {
                 if cmd.starts_with(line.trim()) {
                     Some(cmd.to_string())
