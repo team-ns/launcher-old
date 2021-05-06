@@ -80,7 +80,7 @@ impl Default for Config {
                 skin_url: "http://example.com/skin/{username}.png".to_string(),
                 cape_url: "http://example.com/cape/{username}.png".to_string(),
             },
-            websocket_url: "ws://127.0.0.1:8080".to_string(),
+            websocket_url: "ws://127.0.0.1:8080/api".to_string(),
             project_name: "NSL".to_string(),
             workers: 4,
             runtime: RuntimeConfig {
