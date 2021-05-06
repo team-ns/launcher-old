@@ -1,14 +1,12 @@
 use anyhow::{Context, Result};
-use path_slash::PathBufExt;
 use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
 
-pub fn strip_folder(path: &Path, save_number: usize, skip_number: usize) -> String {
+pub fn strip_folder(path: &Path, save_number: usize, skip_number: usize) -> PathBuf {
     path.iter()
         .take(save_number)
         .chain(path.iter().skip(save_number + skip_number))
-        .collect::<PathBuf>()
-        .to_slash_lossy()
+        .collect()
 }
 
 fn is_not_hidden(entry: &DirEntry) -> bool {

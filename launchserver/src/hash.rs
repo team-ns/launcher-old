@@ -46,6 +46,15 @@ impl HashingService {
         file_server: &str,
         profiles_data: Vec<&ProfileData>,
     ) {
+        for dir in &["profiles", "libraries", "natives", "jre"] {
+            let path = Path::new("static").join(dir);
+            if !path.exists() {
+                match fs::create_dir_all(path).await {
+                    Ok(_) => info!("Create empty directory for {}", dir),
+                    Err(error) => error!("Failed to create empty directory for {}: {}", dir, error),
+                }
+            }
+        }
         hash!(
             args,
             self.hash_profiles(file_server, &profiles_data),
@@ -148,21 +157,30 @@ impl HashingService {
     async fn hash_natives(&mut self, file_server: &str) {
         for version in util::fs::get_first_level_dirs("static/natives") {
             let version_path = version.path();
-            let hashed_native =
-                Self::hash_files(util::fs::get_files_from_dir(version_path), file_server)
-                    .filter_map(|file| async {
-                        match arch::get_os_type(&file.0).await {
-                            Ok(os_type) => Some((os_type, file)),
-                            Err(error) => {
-                                error!("Error while hashing natives: {:?}", error);
-                                None
-                            }
+            let hashed_native = Self::get_hash_stream(
+                util::fs::get_files_from_dir(version_path),
+                file_server,
+                &|path: PathBuf| Ok(path),
+            )
+            .filter_map(|file| async {
+                match arch::get_os_type(&file.0).await {
+                    Ok(os_type) => match file.0.strip_prefix("static/") {
+                        Ok(path) => Some((os_type, (PathBuf::from(path), file.1))),
+                        Err(error) => {
+                            error!("Failed strip native path: {}", error);
+                            None
                         }
-                    })
-                    .collect::<Vec<_>>()
-                    .await
-                    .into_iter()
-                    .into_group_map();
+                    },
+                    Err(error) => {
+                        error!("Error while hashing natives: {}", error);
+                        None
+                    }
+                }
+            })
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .into_group_map();
 
             match util::fs::strip(version_path, "static/natives/") {
                 Ok(version) => {
@@ -191,35 +209,40 @@ impl HashingService {
         ];
 
         for os_type in types {
-            let remote_directory = Self::get_remote_dir(
-                Path::new("static/jre").join(os_type.to_string()),
+            let remote_directory = Self::get_hash_stream(
+                util::fs::get_files_from_dir(Path::new("static/jre").join(os_type.to_string())),
                 file_server,
+                &|path: PathBuf| {
+                    path.strip_prefix("static/")
+                        .map(|path| util::fs::strip_folder(path, 1, 1))
+                        .map_err(|error| anyhow::anyhow!(error))
+                },
             )
+            .collect::<HashMap<_, _>>()
             .await;
             self.files
                 .insert(FileLocation::Jres(os_type), remote_directory);
         }
     }
 
-    fn hash_files<'a>(
-        files: impl Iterator<Item = DirEntry> + 'a,
+    fn get_hash_stream<'a, I, F>(
+        files: I,
         file_server: &'a str,
-    ) -> impl Stream<Item = (PathBuf, RemoteFile)> + 'a {
+        strip: &'a F,
+    ) -> impl Stream<Item = (PathBuf, RemoteFile)> + 'a
+    where
+        F: Fn(PathBuf) -> Result<PathBuf>,
+        I: Iterator<Item = DirEntry> + 'a,
+    {
         futures::stream::iter(files.map(|e| e.into_path())).filter_map(move |path| async move {
             match Self::get_remote_file(file_server, path.as_path()).await {
-                Ok(file) => {
-                    let strip_path = if path.starts_with("static/jre") {
-                        util::fs::strip_folder(
-                            path.strip_prefix("static/")
-                                .expect("Failed to strip prefix!"),
-                            1,
-                            1,
-                        )
-                    } else {
-                        util::fs::strip(path.as_path(), "static/").unwrap()
-                    };
-                    Some((PathBuf::from(strip_path), file))
-                }
+                Ok(file) => match strip(path) {
+                    Ok(path) => Some((path, file)),
+                    Err(error) => {
+                        error!("Failed get file path: {:?}", error);
+                        None
+                    }
+                },
                 Err(error) => {
                     error!("Error while hashing: {:?}", error);
                     None
@@ -258,9 +281,13 @@ impl HashingService {
     }
 
     async fn get_remote_dir<P: AsRef<Path>>(path: P, file_server: &str) -> RemoteDirectory {
-        Self::hash_files(util::fs::get_files_from_dir(path), file_server)
-            .collect::<HashMap<_, _>>()
-            .await
+        Self::get_hash_stream(
+            util::fs::get_files_from_dir(path),
+            file_server,
+            &|path: PathBuf| util::fs::strip(path.as_path(), "static/").map(PathBuf::from),
+        )
+        .collect::<HashMap<_, _>>()
+        .await
     }
 }
 
