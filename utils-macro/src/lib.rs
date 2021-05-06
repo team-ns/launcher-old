@@ -71,9 +71,9 @@ pub fn hash(item: TokenStream) -> TokenStream {
             stream.extend(TokenStream::from(quote! {
                 let resource_name = #resource_name;
                 if #hash_args.is_empty() || #hash_args.contains(&resource_name) {
-                #expr.await;
-                info!("Successfully rehash {}!", resource_name);
-            }
+                    #expr.await;
+                    info!("Successfully rehash {}!", resource_name);
+                }
             }));
         }
     }
