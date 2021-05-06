@@ -62,14 +62,15 @@ pub fn download_webview2() {
         .unwrap();
     let body = installer.as_bytes().to_vec();
     let temp_dir = temp_dir::TempDir::new().expect("Can't create temdir");
+    let install_path = temp_dir.child("install.exe");
     let mut file = fs::OpenOptions::new()
         .create(true)
         .write(true)
-        .open(temp_dir.child("install.exe"))
+        .open(&install_path)
         .unwrap();
     file.write_all(&body).unwrap();
     drop(file);
-    runas::Command::new("install.exe")
+    runas::Command::new(&install_path)
         .args(&["/silent", "/install"])
         .status()
         .expect("Can't run installer");
