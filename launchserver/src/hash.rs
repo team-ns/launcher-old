@@ -209,19 +209,30 @@ impl HashingService {
         ];
 
         for os_type in types {
-            let remote_directory = Self::get_hash_stream(
-                util::fs::get_files_from_dir(Path::new("static/jre").join(os_type.to_string())),
-                file_server,
-                &|path: PathBuf| {
-                    path.strip_prefix("static/")
-                        .map(|path| util::fs::strip_folder(path, 1, 1))
-                        .map_err(|error| anyhow::anyhow!(error))
-                },
-            )
-            .collect::<HashMap<_, _>>()
-            .await;
-            self.files
-                .insert(FileLocation::Jres(os_type), remote_directory);
+            for dir in
+                util::fs::get_first_level_dirs(Path::new("static/jre").join(os_type.to_string()))
+            {
+                let remote_directory = Self::get_hash_stream(
+                    util::fs::get_files_from_dir(dir.path()),
+                    file_server,
+                    &|path: PathBuf| {
+                        path.strip_prefix("static/")
+                            .map(|path| util::fs::strip_folder(path, 1, 1))
+                            .map_err(|error| anyhow::anyhow!(error))
+                    },
+                )
+                .collect::<HashMap<_, _>>()
+                .await;
+                match dir.file_name().to_str() {
+                    Some(name) => {
+                        self.files.insert(
+                            FileLocation::Jres(os_type.clone(), name.to_string()),
+                            remote_directory,
+                        );
+                    }
+                    None => error!("Failed get jre dir name"),
+                }
+            }
         }
     }
 

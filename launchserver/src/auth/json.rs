@@ -72,7 +72,7 @@ impl AuthProvide for JsonAuthProvider {
             let uuid = result.uuid.context("Can't find UUID in auth response")?;
             let access_token = SecurityService::create_access_token();
             self.update_access_token(&uuid, &access_token).await?;
-            Ok(AuthResult { uuid, access_token })
+            Ok(AuthResult { access_token, uuid })
         } else {
             Err(anyhow::anyhow!("{}", result.message.unwrap()))
         }

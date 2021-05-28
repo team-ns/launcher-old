@@ -12,6 +12,7 @@ pub struct Profile {
     pub main_class: String,
     pub update_verify: Vec<String>,
     pub update_exclusion: Vec<String>,
+    pub jvm: String,
     pub jvm_args: Vec<String>,
     pub client_args: Vec<String>,
     pub assets: String,

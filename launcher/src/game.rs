@@ -52,8 +52,14 @@ pub fn create_jvm(profile: Profile, dir: &str, ram: u64) -> Result<JavaVM> {
     match args.build() {
         Ok(args) => {
             env::set_current_dir(profile.get_client_dir(dir))?;
-            let lib: Container<JvmLibrary> =
-                unsafe { Container::load(Path::new(dir).join("jre").join(JVM_LIB_PATH))? };
+            let lib: Container<JvmLibrary> = unsafe {
+                Container::load(
+                    Path::new(dir)
+                        .join("jre")
+                        .join(profile.jvm)
+                        .join(JVM_LIB_PATH),
+                )?
+            };
             Ok(JavaVM::new(args, lib)?)
         }
         Err(_) => Err(anyhow::anyhow!("Failed to create java args!")),
