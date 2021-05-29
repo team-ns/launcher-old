@@ -26,7 +26,7 @@ pub enum FileLocation {
     Libraries(String),
     Assets(String),
     Natives(NativeVersion),
-    Jres(OsType, String),
+    Jres(String, OsType),
 }
 
 pub trait ProfileResources {
@@ -83,8 +83,8 @@ impl ProfileResources for HashingService {
         let jre = self
             .files
             .get(&FileLocation::Jres(
+                selected_profile.jre.clone(),
                 client_info.os_type.clone(),
-                selected_profile.jvm.clone(),
             ))
             .context("Failed to find jre for this OsType")?
             .clone();

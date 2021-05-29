@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::Result;
-use log::{error, info};
+use log::{error, info, warn};
 use path_slash::PathExt;
 use reqwest::Url;
 use teloc::Resolver;
@@ -208,29 +208,32 @@ impl HashingService {
             OsType::WindowsX32,
         ];
 
-        for os_type in types {
-            for dir in
-                util::fs::get_first_level_dirs(Path::new("static/jre").join(os_type.to_string()))
-            {
-                let remote_directory = Self::get_hash_stream(
-                    util::fs::get_files_from_dir(dir.path()),
-                    file_server,
-                    &|path: PathBuf| {
-                        path.strip_prefix("static/")
-                            .map(|path| util::fs::strip_folder(path, 1, 1))
-                            .map_err(|error| anyhow::anyhow!(error))
-                    },
-                )
-                .collect::<HashMap<_, _>>()
-                .await;
-                match dir.file_name().to_str() {
-                    Some(name) => {
-                        self.files.insert(
-                            FileLocation::Jres(os_type.clone(), name.to_string()),
-                            remote_directory,
-                        );
+        for dir in util::fs::get_first_level_dirs(Path::new("static/jre")) {
+            for os_type in &types {
+                let jre_dir = dir.path().join(os_type.to_string());
+                if jre_dir.exists() {
+                    let remote_directory = Self::get_hash_stream(
+                        util::fs::get_files_from_dir(jre_dir),
+                        file_server,
+                        &|path: PathBuf| {
+                            path.strip_prefix("static/")
+                                .map(|path| util::fs::strip_folder(path, 2, 1))
+                                .map_err(|error| anyhow::anyhow!(error))
+                        },
+                    )
+                    .collect::<HashMap<_, _>>()
+                    .await;
+                    match dir.file_name().to_str() {
+                        Some(name) => {
+                            self.files.insert(
+                                FileLocation::Jres(name.to_string(), os_type.clone()),
+                                remote_directory,
+                            );
+                        }
+                        None => error!("Failed get JRE dir name"),
                     }
-                    None => error!("Failed get jre dir name"),
+                } else {
+                    warn!("No such JRE {:?} for os type: {}", dir.file_name(), os_type);
                 }
             }
         }

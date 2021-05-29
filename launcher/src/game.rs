@@ -56,7 +56,7 @@ pub fn create_jvm(profile: Profile, dir: &str, ram: u64) -> Result<JavaVM> {
                 Container::load(
                     Path::new(dir)
                         .join("jre")
-                        .join(profile.jvm)
+                        .join(profile.jre)
                         .join(JVM_LIB_PATH),
                 )?
             };
