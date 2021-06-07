@@ -10,7 +10,7 @@ use teloc::Resolver;
 use tokio::sync::RwLock;
 use walkdir::DirEntry;
 
-use futures::{Stream, StreamExt};
+use futures::{future, Stream, StreamExt};
 use itertools::Itertools;
 use launcher_api::profile::ProfileData;
 use launcher_api::validation::{OsType, RemoteDirectory, RemoteFile};
@@ -248,21 +248,24 @@ impl HashingService {
         F: Fn(PathBuf) -> Result<PathBuf>,
         I: Iterator<Item = DirEntry> + 'a,
     {
-        futures::stream::iter(files.map(|e| e.into_path())).filter_map(move |path| async move {
-            match Self::get_remote_file(file_server, path.as_path()).await {
-                Ok(file) => match strip(path) {
-                    Ok(path) => Some((path, file)),
+        futures::stream::iter(files.map(|e| e.into_path()))
+            .map(move |path| async move {
+                match Self::get_remote_file(file_server, path.as_path()).await {
+                    Ok(file) => match strip(path) {
+                        Ok(path) => Some((path, file)),
+                        Err(error) => {
+                            error!("Failed get file path: {:?}", error);
+                            None
+                        }
+                    },
                     Err(error) => {
-                        error!("Failed get file path: {:?}", error);
+                        error!("Error while hashing: {:?}", error);
                         None
                     }
-                },
-                Err(error) => {
-                    error!("Error while hashing: {:?}", error);
-                    None
                 }
-            }
-        })
+            })
+            .buffer_unordered(50)
+            .filter_map(|x| future::ready(x))
     }
 
     async fn get_remote_file<P: AsRef<Path>>(file_server: &str, path: P) -> Result<RemoteFile> {
