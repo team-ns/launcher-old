@@ -9,7 +9,7 @@ use crate::auth::sql::SqlAuthProvider;
 use crate::auth::AuthProvider;
 use launcher_api::bundle::Window;
 use std::clone::Clone;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub(crate) mod auth;
 mod texture;
@@ -25,6 +25,7 @@ pub struct Config {
     pub project_name: String,
     pub workers: usize,
     pub runtime: RuntimeConfig,
+    pub security: SecurityType,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -40,6 +41,20 @@ pub struct RuntimeConfig {
 pub struct TextureProvider {
     skin_url: String,
     cape_url: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub enum SecurityType {
+    Tls(TlsConfig),
+    None,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TlsConfig {
+    pub cert_file: PathBuf,
+    pub key_file: PathBuf,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -94,6 +109,7 @@ impl Default for Config {
                 game_dir: "%homeDir%/.launcher".to_string(),
                 ram: 1024,
             },
+            security: SecurityType::None,
         }
     }
 }
