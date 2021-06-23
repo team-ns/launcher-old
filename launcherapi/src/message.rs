@@ -24,6 +24,7 @@ pub enum ClientMessage {
     ProfileResources(ProfileResourcesMessage),
     Profile(ProfileMessage),
     ProfilesInfo(ProfilesInfoMessage),
+    Custom(String),
 }
 
 #[derive(Deserialize, Serialize, Debug)]

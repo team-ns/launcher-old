@@ -134,6 +134,9 @@ pub async fn handle_message(
                 profiles_info.message_handle(sp, &mut client).await
             }
             ClientMessage::Connected(connected) => connected.message_handle(sp, &mut client).await,
+            ClientMessage::Custom(body) => Ok(ServerMessage::Error(Error {
+                msg: format!("No such extension that handles a custom message: {}", body),
+            })),
         }?,
         Some(response) => response,
     };
