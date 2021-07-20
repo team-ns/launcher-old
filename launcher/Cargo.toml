@@ -50,7 +50,7 @@ git = "https://github.com/team-ns/jni-rs"
 branch = "dynamic"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winnt"] }
+winapi = { version = "0.3", features = ["winnt", "shellapi"] }
 temp-dir = "0.1"
 runas = "0.2"
 

@@ -1,4 +1,7 @@
 use anyhow::Result;
+use std::ffi::OsStr;
+use std::mem;
+use std::path::Path;
 use tokio::sync::mpsc::UnboundedSender;
 use wry::application::dpi::PhysicalSize;
 use wry::application::event_loop::{EventLoop, EventLoopProxy};
@@ -70,10 +73,81 @@ pub fn download_webview2() {
         .unwrap();
     file.write_all(&body).unwrap();
     drop(file);
-    runas::Command::new(&install_path)
-        .args(&["/silent", "/install"])
-        .status()
-        .expect("Can't run installer");
+    run_admin(&install_path, &["/silent", "/install"]).expect("Can't run installer");
+}
+
+#[cfg(target_os = "windows")]
+fn run_admin<FP: AsRef<Path>, AP: AsRef<Path>>(file: FP, args: &[AP]) -> Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+
+    let mut params = String::new();
+    for arg in args.iter() {
+        let arg = arg.as_ref().to_string_lossy();
+        params.push(' ');
+        if arg.len() == 0 {
+            params.push_str("\"\"");
+        } else if arg.find(&[' ', '\t', '"'][..]).is_none() {
+            params.push_str(&arg);
+        } else {
+            params.push('"');
+            for c in arg.chars() {
+                match c {
+                    '\\' => params.push_str("\\\\"),
+                    '"' => params.push_str("\\\""),
+                    c => params.push(c),
+                }
+            }
+            params.push('"');
+        }
+    }
+
+    let file = OsStr::new(file.as_ref())
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    let params = OsStr::new(&params)
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+
+    unsafe {
+        use winapi::shared::minwindef::DWORD;
+        use winapi::um::processthreadsapi::GetExitCodeProcess;
+        use winapi::um::shellapi::{
+            ShellExecuteExW, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
+        };
+        use winapi::um::synchapi::WaitForSingleObject;
+        use winapi::um::winbase::INFINITE;
+        use winapi::um::winuser::SW_NORMAL;
+
+        let mut sei: SHELLEXECUTEINFOW = mem::zeroed();
+
+        sei.fMask = SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS;
+        sei.lpVerb = OsStr::new("runas")
+            .encode_wide()
+            .chain(Some(0))
+            .collect::<Vec<_>>()
+            .as_ptr();
+        sei.lpFile = file.as_ptr();
+        sei.lpParameters = params.as_ptr();
+        sei.nShow = SW_NORMAL;
+
+        let result = ShellExecuteExW(&mut sei);
+        if result == 0 || sei.hProcess.is_null() {
+            return Err(anyhow::anyhow!("Can't execute command"));
+        }
+
+        WaitForSingleObject(sei.hProcess, INFINITE);
+
+        let mut code: DWORD = mem::zeroed();
+        let result = GetExitCodeProcess(sei.hProcess, &mut code);
+
+        if result == 0 {
+            return Err(anyhow::anyhow!("Can't get proccess exit code"));
+        }
+    }
+
+    Ok(())
 }
 
 fn create_event_loop() -> EventLoop<WebviewEvent> {
