@@ -14,12 +14,12 @@ use tokio::time::Duration;
 
 use crate::config::{Settings, SETTINGS};
 
-use nfd2::Response;
 use path_slash::PathBufExt;
 
 use crate::runtime::webview::{EventProxy, WebviewEvent};
 use crate::security::validation::get_os_type;
 use launcher_api::validation::ClientInfo;
+use native_dialog::FileDialog;
 use notify::EventKind;
 use std::{env, fs};
 use sysinfo::SystemExt;
@@ -256,8 +256,10 @@ pub async fn select_game_dir(handler: EventProxy) -> Result<()> {
         .expect("Can't take settings")
         .try_lock()
         .map_err(|_e| anyhow::anyhow!("Вы уже выбираете папку!"))?;
-    let response = nfd2::open_pick_folder(None)?;
-    if let Response::Okay(folder) = response {
+    let path = FileDialog::new()
+        .set_location(&current_settings.game_dir)
+        .show_open_single_dir();
+    if let Ok(Some(folder)) = path {
         current_settings.game_dir = folder.to_slash_lossy();
         current_settings.save()?;
         update_settings(&current_settings, handler).await?;
