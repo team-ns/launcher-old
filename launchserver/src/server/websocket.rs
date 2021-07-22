@@ -1,7 +1,19 @@
+use std::cell::RefCell;
+use std::io;
+use std::ops::Deref;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use anyhow::Result;
 use futures::SinkExt;
+use log::debug;
+use log::error;
+use ntex::web::{ws, HttpRequest, HttpResponse};
+use ntex::{fn_factory_with_config, fn_service, map_config, rt, web, Service};
+use teloc::Resolver;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::{mpsc, RwLock};
+
 use launcher_api::message::{
     AuthMessage, AuthResponse, ClientMessage, ClientRequest, ConnectedMessage, Error,
     JoinServerMessage, ProfileMessage, ProfileResourcesMessage, ProfileResponse,
@@ -9,18 +21,8 @@ use launcher_api::message::{
 };
 use launcher_api::optional::Optional;
 use launcher_api::profile::ProfileInfo;
+use launcher_api::validation::ClientInfo;
 use launcher_extension_api::connection::Client;
-use log::debug;
-use log::error;
-use ntex::web::{ws, HttpRequest, HttpResponse};
-use ntex::{fn_factory_with_config, fn_service, map_config, rt, web, Service};
-use std::cell::RefCell;
-use std::io;
-use std::ops::Deref;
-use std::rc::Rc;
-use teloc::Resolver;
-use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::sync::{mpsc, RwLock};
 
 use crate::auth::AuthProvider;
 use crate::extensions::ExtensionService;
@@ -121,9 +123,10 @@ pub async fn handle_message(
     sp: Arc<LauncherServiceProvider>,
 ) -> Result<ServerMessage> {
     let mut client = (*client).borrow_mut();
-    let extension_service: &ExtensionService = sp.resolve();
-    let msg = match extension_service.handle_message(&request, &mut client)? {
-        None => match request {
+    let es_sp = sp.clone();
+    let extension_service: &ExtensionService = es_sp.resolve();
+    let msg = match extension_service.pre_handle_message(&request, &mut client)? {
+        None => match &request {
             ClientMessage::Auth(auth) => auth.message_handle(sp, &mut client).await,
             ClientMessage::JoinServer(join) => join.message_handle(sp, &mut client).await,
             ClientMessage::Profile(profile) => profile.message_handle(sp, &mut client).await,
@@ -140,13 +143,15 @@ pub async fn handle_message(
         }?,
         Some(response) => response,
     };
-    Ok(msg)
+    Ok(extension_service
+        .post_handle_message(&request, &mut client, &msg)?
+        .unwrap_or(msg))
 }
 
 #[async_trait::async_trait]
 pub trait MessageHandle {
     async fn message_handle(
-        self,
+        &self,
         sp: Arc<LauncherServiceProvider>,
         client: &mut Client,
     ) -> Result<ServerMessage>;
@@ -155,7 +160,7 @@ pub trait MessageHandle {
 #[async_trait::async_trait]
 impl MessageHandle for ProfileResourcesMessage {
     async fn message_handle(
-        self,
+        &self,
         sp: Arc<LauncherServiceProvider>,
         client: &mut Client,
     ) -> Result<ServerMessage> {
@@ -184,7 +189,7 @@ impl MessageHandle for ProfileResourcesMessage {
 #[async_trait::async_trait]
 impl MessageHandle for ProfileMessage {
     async fn message_handle(
-        self,
+        &self,
         sp: Arc<LauncherServiceProvider>,
         client: &mut Client,
     ) -> Result<ServerMessage> {
@@ -211,7 +216,7 @@ impl MessageHandle for ProfileMessage {
 #[async_trait::async_trait]
 impl MessageHandle for ProfilesInfoMessage {
     async fn message_handle(
-        self,
+        &self,
         sp: Arc<LauncherServiceProvider>,
         client: &mut Client,
     ) -> Result<ServerMessage> {
@@ -236,11 +241,14 @@ impl MessageHandle for ProfilesInfoMessage {
 #[async_trait::async_trait]
 impl MessageHandle for ConnectedMessage {
     async fn message_handle(
-        self,
+        &self,
         _sp: Arc<LauncherServiceProvider>,
         client: &mut Client,
     ) -> Result<ServerMessage> {
-        client.client_info = Some(self.client_info);
+        let client_info = ClientInfo {
+            os_type: self.client_info.os_type.clone(),
+        };
+        client.client_info = Some(client_info);
         Ok(ServerMessage::Empty)
     }
 }
@@ -248,7 +256,7 @@ impl MessageHandle for ConnectedMessage {
 #[async_trait::async_trait]
 impl MessageHandle for AuthMessage {
     async fn message_handle(
-        self,
+        &self,
         sp: Arc<LauncherServiceProvider>,
         client: &mut Client,
     ) -> Result<ServerMessage> {
@@ -271,7 +279,7 @@ impl MessageHandle for AuthMessage {
 #[async_trait::async_trait]
 impl MessageHandle for JoinServerMessage {
     async fn message_handle(
-        self,
+        &self,
         sp: Arc<LauncherServiceProvider>,
         _client: &mut Client,
     ) -> Result<ServerMessage> {

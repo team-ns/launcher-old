@@ -44,7 +44,6 @@ pub struct TextureProvider {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
 pub enum SecurityType {
     Tls(TlsConfig),
     None,

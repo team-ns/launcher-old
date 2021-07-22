@@ -1,13 +1,14 @@
+use std::collections::HashMap;
+use std::fs;
+
 use dlopen::symbor::{Library, Symbol};
 
 use launcher_extension_api::command::{CommandRegister, ExtensionCommand};
-
-use crate::util;
 use launcher_extension_api::connection::Client;
 use launcher_extension_api::launcher::message::{ClientMessage, ServerMessage};
 use launcher_extension_api::{LauncherExtension, Result};
-use std::collections::HashMap;
-use std::fs;
+
+use crate::util;
 
 #[cfg(target_os = "linux")]
 const FILE_EXTENSION: &str = "so";
@@ -88,13 +89,31 @@ impl ExtensionService {
         }
     }
 
-    pub fn handle_message(
+    pub fn pre_handle_message(
         &self,
         message: &ClientMessage,
         client: &mut Client,
     ) -> Result<Option<ServerMessage>> {
         for library in self.extensions.values() {
-            let response = library.extension.handle_message(message, client)?;
+            let response = library.extension.pre_handle_message(message, client)?;
+            if response.is_some() {
+                return Ok(response);
+            }
+        }
+        Ok(None)
+    }
+
+    pub fn post_handle_message(
+        &self,
+        request_message: &ClientMessage,
+        client: &mut Client,
+        response_message: &ServerMessage,
+    ) -> Result<Option<ServerMessage>> {
+        for library in self.extensions.values() {
+            let response =
+                library
+                    .extension
+                    .post_handle_message(request_message, client, response_message)?;
             if response.is_some() {
                 return Ok(response);
             }

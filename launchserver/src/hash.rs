@@ -265,7 +265,7 @@ impl HashingService {
                 }
             })
             .buffer_unordered(50)
-            .filter_map(|x| future::ready(x))
+            .filter_map(future::ready)
     }
 
     async fn get_remote_file<P: AsRef<Path>>(file_server: &str, path: P) -> Result<RemoteFile> {
