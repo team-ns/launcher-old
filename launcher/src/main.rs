@@ -8,9 +8,8 @@ mod game;
 mod runtime;
 mod security;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init();
-    runtime::start().await;
+    runtime::run();
     Ok(())
 }

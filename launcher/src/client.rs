@@ -1,4 +1,11 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use anyhow::{anyhow, Result};
+use serde_json::Value;
+use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::{oneshot, Mutex};
+use uuid::Uuid;
 
 use launcher_api::message::{
     AuthMessage, AuthResponse, ClientMessage, ClientRequest, ConnectedMessage, JoinServerMessage,
@@ -6,19 +13,13 @@ use launcher_api::message::{
     ServerResponse,
 };
 use launcher_api::message::{Error, ProfileResourcesMessage, ProfileResourcesResponse};
-
-use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
+use launcher_api::validation::ClientInfo;
 
 use crate::config::BUNDLE;
-
+use crate::runtime::webview::{EventProxy, WebviewEvent};
 use crate::security;
 use crate::security::validation::get_os_type;
 use crate::security::SecurityManager;
-use launcher_api::validation::ClientInfo;
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::{oneshot, Mutex};
-use uuid::Uuid;
 
 pub mod downloader;
 
@@ -37,7 +38,7 @@ pub struct AuthInfo {
 }
 
 impl Client {
-    pub async fn new(runtime_sender: UnboundedSender<String>) -> Result<Self> {
+    pub async fn new(runtime_sender: EventProxy) -> Result<Self> {
         let address: &str = &BUNDLE.websocket;
         let (sender, mut receiver) = Client::connect(&address).await?;
         let requests: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ServerMessage>>>> =
@@ -62,9 +63,19 @@ impl Client {
                                 sender.send(response.message).expect("Can't send message");
                             }
                         } else if let ServerMessage::Runtime(message) = response.message {
-                            runtime_sender
-                                .send(message)
-                                .expect("Can't send message to runtime");
+                            match serde_json::from_str::<Value>(&message) {
+                                Ok(payload) => {
+                                    runtime_sender
+                                        .send_event(WebviewEvent::Emit(
+                                            "customMessage".to_string(),
+                                            payload,
+                                        ))
+                                        .expect("Can't send message to runtime");
+                                }
+                                Err(error) => {
+                                    log::error!("Can't parse custom message to json: {}", error);
+                                }
+                            }
                         }
                     }
                 }
@@ -162,6 +173,15 @@ impl Client {
         });
         match self.send_sync(message).await {
             ServerMessage::Profile(profile) => Ok(profile),
+            ServerMessage::Error(error) => Err(anyhow::anyhow!("{}", error.msg)),
+            _ => Err(anyhow::anyhow!("Profile sync error!")),
+        }
+    }
+
+    pub async fn custom_message(&mut self, message: &str) -> Result<String> {
+        let message = ClientMessage::Custom(message.to_string());
+        match self.send_sync(message).await {
+            ServerMessage::Runtime(result) => Ok(result),
             ServerMessage::Error(error) => Err(anyhow::anyhow!("{}", error.msg)),
             _ => Err(anyhow::anyhow!("Profile sync error!")),
         }

@@ -15,6 +15,20 @@ pub(crate) mod auth;
 mod profile;
 
 #[cfg(target_os = "windows")]
+#[link_section = ".drectve"]
+#[no_mangle]
+pub static _LINK_ARGS: [u8; 74] =
+    *b" /export:NvOptimusEnablement /export:AmdPowerXpressRequestHighPerformance ";
+
+#[cfg(target_os = "windows")]
+#[no_mangle]
+pub static mut NvOptimusEnablement: i32 = 1;
+
+#[cfg(target_os = "windows")]
+#[no_mangle]
+pub static mut AmdPowerXpressRequestHighPerformance: i32 = 1;
+
+#[cfg(target_os = "windows")]
 const JVM_LIB_PATH: &str = "bin/server/jvm.dll";
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 const JVM_LIB_PATH: &str = "lib/amd64/server/libjvm.so";

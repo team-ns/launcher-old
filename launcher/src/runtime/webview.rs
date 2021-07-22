@@ -1,15 +1,17 @@
-use anyhow::Result;
 use std::ffi::OsStr;
 use std::mem;
 use std::path::Path;
-use tokio::sync::mpsc::UnboundedSender;
+
+use anyhow::Result;
+use serde_json::Value;
 use wry::application::dpi::PhysicalSize;
 use wry::application::event_loop::{EventLoop, EventLoopProxy};
+use wry::application::window::Window;
 use wry::webview::WebView;
 
 use crate::config::BUNDLE;
-use crate::runtime::invoke_handler;
-use crate::runtime::messages::RuntimeMessage;
+use crate::runtime::arg::InvokePayload;
+use crate::runtime::handle;
 
 pub type EventProxy = EventLoopProxy<WebviewEvent>;
 
@@ -17,15 +19,16 @@ pub type EventProxy = EventLoopProxy<WebviewEvent>;
 pub enum WebviewEvent {
     DispatchScript(String),
     HideWindow,
+    ShowWindow,
+    Emit(String, Value),
     Exit,
 }
 
-pub fn create_webview(
-    tx: UnboundedSender<(RuntimeMessage, EventProxy)>,
-) -> Result<(WebView, EventLoop<WebviewEvent>)> {
-    use wry::{application::window::WindowBuilder, webview::WebViewBuilder};
+pub fn create_window() -> Result<(Window, EventLoop<WebviewEvent>)> {
+    use wry::application::window::WindowBuilder;
 
-    let event_loop = create_event_loop();
+    let event_loop = EventLoop::<WebviewEvent>::with_user_event();
+
     let window = WindowBuilder::new()
         .with_decorations(!BUNDLE.window.frameless)
         .with_title(&BUNDLE.project_name)
@@ -35,14 +38,47 @@ pub fn create_webview(
         .build(&event_loop)
         .unwrap();
 
-    let proxy = event_loop.create_proxy();
-    let webview = WebViewBuilder::new(window)
-        .unwrap()
-        .with_custom_protocol("nslauncher".to_string(), move |_, _| Ok(get_runtime()))
+    Ok((window, event_loop))
+}
+
+pub fn create_webview(window: Window, proxy: EventProxy) -> Result<WebView> {
+    use wry::webview::WebViewBuilder;
+    let webview = WebViewBuilder::new(window).unwrap();
+    let webview = webview
+        .with_initialization_script(&get_initialization_script())
+        .with_custom_protocol("nslauncher".to_string(), move |_, _| {
+            Ok((get_runtime(), "text/html".to_string()))
+        })
         .with_url("nslauncher://")?
-        .with_rpc_handler(move |window, req| invoke_handler(window, req, tx.clone(), proxy.clone()))
+        .with_rpc_handler(move |_window, request| {
+            let command = request.method.clone();
+
+            let arg = request
+                .params
+                .unwrap()
+                .as_array_mut()
+                .unwrap()
+                .first_mut()
+                .unwrap_or(&mut Value::Null)
+                .take();
+            match serde_json::from_value::<InvokePayload>(arg) {
+                Ok(message) => {
+                    let proxy = proxy.clone();
+                    let _ = handle(proxy, command, message);
+                }
+                Err(error) => {
+                    let proxy = proxy.clone();
+                    let _ = proxy.send_event(WebviewEvent::DispatchScript(format!(
+                        r#"console.error({})"#,
+                        Value::String(error.to_string())
+                    )));
+                }
+            }
+
+            None
+        })
         .build()?;
-    Ok((webview, event_loop))
+    Ok(webview)
 }
 
 #[cfg(feature = "bundle")]
@@ -150,18 +186,28 @@ fn run_admin<FP: AsRef<Path>, AP: AsRef<Path>>(file: FP, args: &[AP]) -> Result<
     Ok(())
 }
 
-fn create_event_loop() -> EventLoop<WebviewEvent> {
-    #[cfg(target_os = "linux")]
-    {
-        EventLoop::<WebviewEvent>::new_any_thread()
-    }
-    #[cfg(target_os = "windows")]
-    {
-        use wry::application::platform::windows::EventLoopExtWindows;
-        EventLoop::<WebviewEvent>::new_any_thread()
-    }
-    #[cfg(all(not(target_os = "windows"), not(target_os = "linux")))]
-    {
-        EventLoop::<WebviewEvent>::with_user_event()
-    }
+fn get_initialization_script() -> String {
+    return format!(
+        "
+      window['{queue}'] = [];
+      window['{function}'] = function (eventData, ignoreQueue) {{
+      const listeners = (window['{listeners}'] && window['{listeners}'][eventData.event]) || []
+      if (!ignoreQueue && listeners.length === 0) {{
+        window['{queue}'].push({{
+          eventData: eventData
+        }})
+      }}
+      if (listeners.length > 0) {{
+           for (let i = listeners.length - 1; i >= 0; i--) {{
+            const listener = listeners[i]
+            eventData.id = listener.id
+            listener.handler(eventData.payload)
+        }}
+      }}
+    }}
+    ",
+        function = "b03ebfab-8145-44ac-a4b6-d800ddfa3bba",
+        queue = "53a38c36-7040-4b88-aca2-b7390bbd3fd6",
+        listeners = "08b8adb2-276a-49e0-b5d1-67ee5c381946"
+    );
 }

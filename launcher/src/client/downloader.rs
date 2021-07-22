@@ -1,20 +1,23 @@
-use anyhow::{Context, Error, Result};
-use futures::future::join_all;
-use hyper::body::HttpBody;
-use hyper::{Body, Client, Request, Uri};
-use hyper_tls::HttpsConnector;
-
-use crate::runtime::webview::{EventProxy, WebviewEvent};
-use futures::Future;
-use launcher_api::validation::RemoteFile;
 use std::fs;
 use std::io::SeekFrom;
 use std::path::Path;
+
+use anyhow::{Context, Error, Result};
+use futures::future::join_all;
+use futures::Future;
+use hyper::body::HttpBody;
+use hyper::{Body, Client, Request, Uri};
+use hyper_tls::HttpsConnector;
+use serde_json::Value;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::JoinError;
+
+use launcher_api::validation::RemoteFile;
+
+use crate::runtime::webview::{EventProxy, WebviewEvent};
 
 const SMALL_SIZE: usize = 1048576;
 const CHUNK_SIZE: usize = 512000;
@@ -41,15 +44,13 @@ pub async fn download(files: Vec<(String, RemoteFile)>, handler: EventProxy) -> 
         #[allow(unused_must_use)]
         async move {
             let mut receive_size = 0;
-            handler.send_event(WebviewEvent::DispatchScript(format!(
-                "app.backend.download.setTotalSize('{}')",
-                total_size
-            )));
+            handler.send_event(WebviewEvent::Emit(
+                "startDownload".to_string(),
+                serde_json::json!(total_size),
+            ));
             loop {
                 if total_size == receive_size {
-                    handler.send_event(WebviewEvent::DispatchScript(
-                        "app.backend.download.wait()".to_string(),
-                    ));
+                    handler.send_event(WebviewEvent::Emit("hashing".to_string(), Value::Null));
                     return;
                 }
                 match receiver
@@ -59,16 +60,16 @@ pub async fn download(files: Vec<(String, RemoteFile)>, handler: EventProxy) -> 
                 {
                     Ok(size) => {
                         receive_size += size;
-                        handler.send_event(WebviewEvent::DispatchScript(format!(
-                            "app.backend.download.updateSize('{}')",
-                            receive_size
-                        )));
+                        handler.send_event(WebviewEvent::Emit(
+                            "download".to_string(),
+                            serde_json::json!(receive_size),
+                        ));
                     }
                     Err(error) => {
-                        handler.send_event(WebviewEvent::DispatchScript(format!(
-                            "app.backend.error('{}')",
-                            error
-                        )));
+                        handler.send_event(WebviewEvent::Emit(
+                            "downloadError".to_string(),
+                            serde_json::json!(format!("{}", error)),
+                        ));
                         return;
                     }
                 }

@@ -7,6 +7,7 @@ use launcher_api::profile::Profile;
 use launcher_api::validation::{HashedFile, OsType, RemoteDirectory, RemoteFile};
 use log::debug;
 use path_slash::PathExt;
+use serde_json::Value;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -56,9 +57,7 @@ pub async fn validate_profile(
     let verify = &profile.update_verify;
     let exclude = &profile.update_exclusion;
 
-    handler.send_event(WebviewEvent::DispatchScript(
-        "app.backend.download.wait()".to_string(),
-    ))?;
+    handler.send_event(WebviewEvent::Emit("hashing".to_string(), Value::Null))?;
     if let ValidationStatus::NeedUpdate(files_to_update, file_to_remove) =
         validate(&files, verify, exclude)
     {
