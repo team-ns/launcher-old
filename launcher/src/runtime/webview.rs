@@ -1,5 +1,4 @@
-use std::ffi::OsStr;
-use std::mem;
+#[cfg(target_os = "windows")]
 use std::path::Path;
 
 use anyhow::Result;
@@ -114,6 +113,8 @@ pub fn download_webview2() {
 
 #[cfg(target_os = "windows")]
 fn run_admin<FP: AsRef<Path>, AP: AsRef<Path>>(file: FP, args: &[AP]) -> Result<()> {
+    use std::ffi::OsStr;
+    use std::mem;
     use std::os::windows::ffi::OsStrExt;
 
     let mut params = String::new();
