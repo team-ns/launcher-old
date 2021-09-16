@@ -26,7 +26,7 @@ hyper-tls = "0.5"
 futures = "0.3"
 anyhow = "1.0.31"
 minreq = { version = "2.3", features = ["https-native"] }
-notify = "5.0.0-pre.2"
+notify = "5.0.0-pre.13"
 once_cell = "1.5"
 uuid = { version = "0.8", features = ["v4"] }
 log = "0.4"
