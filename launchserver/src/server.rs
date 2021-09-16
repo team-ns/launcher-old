@@ -1,5 +1,5 @@
 use crate::config::{Config, SecurityType};
-use crate::server::http::has_join;
+use crate::server::http::{has_join, username_to_uuid, uuid_to_profile};
 use crate::server::websocket::ws_api;
 use crate::LauncherServiceProvider;
 use anyhow::Result;
@@ -25,6 +25,8 @@ pub async fn run(data: Data<LauncherServiceProvider>) -> Result<()> {
             .service(web::resource("/api").route(web::get().to(ws_api)))
             .service(ntex_files::Files::new("/files", "static"))
             .service(web::resource("/hasJoined").route(web::get().to(has_join)))
+            .service(web::resource("/profiles/minecraft").route(web::post().to(username_to_uuid)))
+            .service(web::resource("/profiles/{uuid}").route(web::get().to(uuid_to_profile)))
     })
     .workers(config.workers);
     match &config.security {
