@@ -38,14 +38,14 @@ fn create_watcher<T: notify::Watcher>(
     profile: &Profile,
     sender: Sender<Result<Event, Error>>,
 ) -> Result<T> {
-    let mut watcher = T::new_immediate(move |res| {
+    let mut watcher = T::new(move |res| {
         sender.send(res).expect("Can't send message");
     })?;
     for path in &profile.update_verify {
-        watcher.watch(path, RecursiveMode::Recursive)?;
+        watcher.watch(path.as_ref(), RecursiveMode::Recursive)?;
     }
     for path in &profile.update_exclusion {
-        watcher.unwatch(path)?;
+        watcher.unwatch(path.as_ref())?;
     }
     Ok(watcher)
 }
