@@ -20,7 +20,7 @@ env_logger = "0.7.1"
 rand = "0.7.3"
 base64 = "0.12.1"
 yarws = { git = "https://github.com/team-ns/yarws" }
-ecies-ed25519 = "0.3"
+ecies-ed25519 = "0.5"
 hyper = { version = "0.14", features = ["client", "http2", "http1"] }
 hyper-tls = "0.5"
 futures = "0.3"
