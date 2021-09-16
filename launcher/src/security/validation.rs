@@ -59,7 +59,7 @@ pub async fn validate_profile(
 
     handler.send_event(WebviewEvent::Emit("hashing".to_string(), Value::Null))?;
     if let ValidationStatus::NeedUpdate(files_to_update, file_to_remove) =
-        validate(&files, verify, exclude)
+        validate(files, verify, exclude)
     {
         debug!("Files to download: {:?}", files_to_update);
         debug!("Files to remove: {:?}", file_to_remove);
@@ -69,7 +69,7 @@ pub async fn validate_profile(
         }
     }
     let watcher = WatcherService::new(profile).expect("Failed to create WatcherService");
-    match validate(&files, verify, exclude) {
+    match validate(files, verify, exclude) {
         ValidationStatus::Success => Ok(watcher),
         ValidationStatus::NeedUpdate(files, file_to_remove) => Err(anyhow::anyhow!(
             "Sync error: {:?}",

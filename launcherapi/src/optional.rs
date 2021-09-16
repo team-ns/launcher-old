@@ -139,7 +139,7 @@ impl Optional {
 impl Apply for Optional {
     fn apply(&self, client_info: &ClientInfo) -> bool {
         self.rules.iter().any(|rule| match rule {
-            Rule::OsType(rule) => rule.apply(&client_info),
+            Rule::OsType(rule) => rule.apply(client_info),
         })
     }
 }

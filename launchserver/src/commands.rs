@@ -123,7 +123,7 @@ impl CommandHelper {
     }
 
     pub fn new_command(&mut self, command: &'static Command) {
-        self.commands.insert(&command.name, command);
+        self.commands.insert(command.name, command);
     }
 }
 
