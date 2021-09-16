@@ -40,7 +40,7 @@ pub struct AuthInfo {
 impl Client {
     pub async fn new(runtime_sender: EventProxy) -> Result<Self> {
         let address: &str = &BUNDLE.websocket;
-        let (sender, mut receiver) = Client::connect(&address).await?;
+        let (sender, mut receiver) = Client::connect(address).await?;
         let requests: Arc<Mutex<HashMap<Uuid, oneshot::Sender<ServerMessage>>>> =
             Default::default();
         let response_requests = requests.clone();
@@ -136,7 +136,7 @@ impl Client {
         }
     }
 
-    pub async fn get_resources(
+    pub async fn fetch_resources(
         &mut self,
         profile: &str,
         optionals: Vec<String>,
@@ -153,7 +153,7 @@ impl Client {
         }
     }
 
-    pub async fn get_profiles(&mut self) -> Result<ProfilesInfoResponse> {
+    pub async fn fetch_profiles(&mut self) -> Result<ProfilesInfoResponse> {
         let message = ClientMessage::ProfilesInfo(ProfilesInfoMessage);
         match self.send_sync(message).await {
             ServerMessage::ProfilesInfo(info) => Ok(info),
@@ -162,7 +162,7 @@ impl Client {
         }
     }
 
-    pub async fn get_profile(
+    pub async fn fetch_profile(
         &mut self,
         profile: &str,
         optionals: Vec<String>,

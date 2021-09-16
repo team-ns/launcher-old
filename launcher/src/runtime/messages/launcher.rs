@@ -88,7 +88,7 @@ async fn login_user(client: &mut Client, login: &str, password: &str) -> Result<
         uuid: response.uuid,
         username: login.to_string(),
     });
-    let profiles = client.get_profiles().await?;
+    let profiles = client.fetch_profiles().await?;
     Ok(profiles.profiles_info)
 }
 
@@ -209,8 +209,8 @@ async fn start_client(
         .get_optionals(&profile);
     let (resources, profile, auth_info) = {
         let mut client = socket.lock().await;
-        let resources = client.get_resources(&profile, optionals.clone()).await?;
-        let profile = client.get_profile(&profile, optionals).await?.profile;
+        let resources = client.fetch_resources(&profile, optionals.clone()).await?;
+        let profile = client.fetch_profile(&profile, optionals).await?.profile;
         let auth_info = client.auth_info.clone();
         (resources, profile, auth_info)
     };
