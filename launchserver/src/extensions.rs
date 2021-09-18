@@ -47,10 +47,11 @@ impl ExtensionService {
         fs::create_dir_all("extensions").expect("Can't create extension folder");
         let mut extensions = HashMap::new();
         for entry in util::fs::get_files_from_dir("extensions").filter(|e| {
-            e.path()
-                .extension()
-                .map(|ex| ex.eq(FILE_EXTENSION))
-                .unwrap_or(false)
+            e.depth() == 1
+                && e.path()
+                    .extension()
+                    .map(|ex| ex.eq(FILE_EXTENSION))
+                    .unwrap_or(false)
         }) {
             let lib = Library::open(entry.path()).expect("Can't load library");
             let new_extension: Symbol<ExtensionFn> =
