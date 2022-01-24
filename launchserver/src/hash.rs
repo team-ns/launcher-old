@@ -157,30 +157,27 @@ impl HashingService {
     async fn hash_natives(&mut self, file_server: &str) {
         for version in util::fs::get_first_level_dirs("static/natives") {
             let version_path = version.path();
-            let hashed_native = Self::get_hash_stream(
-                util::fs::get_files_from_dir(version_path),
-                file_server,
-                &|path: PathBuf| Ok(path),
-            )
-            .filter_map(|file| async {
-                match arch::get_os_type(&file.0).await {
-                    Ok(os_type) => match file.0.strip_prefix("static/") {
-                        Ok(path) => Some((os_type, (PathBuf::from(path), file.1))),
-                        Err(error) => {
-                            error!("Failed strip native path: {}", error);
-                            None
+            let hashed_native =
+                Self::get_hash_stream(util::fs::get_files_from_dir(version_path), file_server, &Ok)
+                    .filter_map(|file| async {
+                        match arch::get_os_type(&file.0).await {
+                            Ok(os_type) => match file.0.strip_prefix("static/") {
+                                Ok(path) => Some((os_type, (PathBuf::from(path), file.1))),
+                                Err(error) => {
+                                    error!("Failed strip native path: {}", error);
+                                    None
+                                }
+                            },
+                            Err(error) => {
+                                error!("Error while hashing natives: {}", error);
+                                None
+                            }
                         }
-                    },
-                    Err(error) => {
-                        error!("Error while hashing natives: {}", error);
-                        None
-                    }
-                }
-            })
-            .collect::<Vec<_>>()
-            .await
-            .into_iter()
-            .into_group_map();
+                    })
+                    .collect::<Vec<_>>()
+                    .await
+                    .into_iter()
+                    .into_group_map();
 
             match util::fs::strip(version_path, "static/natives/") {
                 Ok(version) => {

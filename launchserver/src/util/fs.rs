@@ -21,7 +21,7 @@ pub fn get_files_from_dir<P: AsRef<Path>>(path: P) -> impl Iterator<Item = DirEn
     WalkDir::new(path)
         .min_depth(1)
         .into_iter()
-        .filter_entry(|e| is_not_hidden(e))
+        .filter_entry(is_not_hidden)
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
 }
