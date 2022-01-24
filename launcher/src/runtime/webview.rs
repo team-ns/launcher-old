@@ -1,12 +1,8 @@
-use std::process;
-
 use anyhow::Result;
-
 use serde_json::Value;
 use wry::application::dpi::PhysicalSize;
 use wry::application::event::{Event, WindowEvent};
 use wry::application::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
-
 use wry::http::ResponseBuilder;
 
 use crate::config::BUNDLE;
@@ -165,8 +161,8 @@ pub fn has_webview() -> bool {
             return true;
         }
     } else if cfg!(target_arch = "x86_64") && hklm.open_subkey(
-            "SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
-        ).is_ok() {
+        "SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+    ).is_ok() {
         return true;
     }
 
@@ -177,6 +173,7 @@ pub fn has_webview() -> bool {
 pub fn install_webview2() {
     use std::fs;
     use std::io::Write;
+    use std::process;
 
     let installer = minreq::get("https://go.microsoft.com/fwlink/p/?LinkId=2124703")
         .send()

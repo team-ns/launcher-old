@@ -22,8 +22,11 @@ pub static PLAYING: OnceCell<()> = OnceCell::new();
 static RUNTIME: OnceCell<Runtime> = OnceCell::new();
 
 pub fn run() {
-    if cfg!(target_os = "windows") && !webview::has_webview() {
-        webview::install_webview2()
+    #[cfg(target_os = "windows")]
+    {
+        if !webview::has_webview() {
+            webview::install_webview2()
+        }
     }
     webview::launch().expect("Can't run launcher webview");
 }
