@@ -34,8 +34,9 @@ bincode = "1.3"
 native-dialog = "0.5.5"
 t1ha = "0.1.0"
 sys-info = "0.9"
-wry = "0.11"
-include-crypt = "0.1.0"
+wry = "0.12"
+include-crypt = "0.1"
+mime_guess = "2.0"
 
 [dependencies.tokio]
 version = "1"
@@ -51,6 +52,7 @@ branch = "dynamic"
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winnt", "shellapi"] }
 temp-dir = "0.1"
+winreg = "0.10"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 uname = "0.1"
