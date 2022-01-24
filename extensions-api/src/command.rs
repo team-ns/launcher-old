@@ -10,16 +10,9 @@ pub trait ExtensionCommandExecutor: Send {
     fn execute(&self, args: &[&str]);
 }
 
+#[derive(Default)]
 pub struct CommandRegister {
     extension_commands: HashMap<String, ExtensionCommand>,
-}
-
-impl Default for CommandRegister {
-    fn default() -> Self {
-        CommandRegister {
-            extension_commands: Default::default(),
-        }
-    }
 }
 
 impl CommandRegister {
