@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::{env, fs};
 
@@ -37,7 +38,7 @@ pub enum Cmd {
     },
     SelectGameDir,
     SaveSettings {
-        settings: Settings,
+        settings: UserSettings,
     },
     SendCustomMessage {
         message: String,
@@ -95,7 +96,35 @@ async fn login_user(client: &mut Client, login: &str, password: &str) -> Result<
 #[derive(Serialize, Deserialize, Debug)]
 struct ReadyResponse {
     profiles: Option<Vec<ProfileInfo>>,
-    settings: Settings,
+    settings: UserSettings,
+}
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct UserSettings {
+    game_dir: String,
+    ram: u64,
+    optionals: HashMap<String, Vec<String>>,
+    properties: HashMap<String, String>,
+}
+
+impl From<Settings> for UserSettings {
+    fn from(settings: Settings) -> Self {
+        Self {
+            game_dir: settings.game_dir,
+            ram: settings.ram,
+            optionals: settings.optionals,
+            properties: settings.properties,
+        }
+    }
+}
+
+impl UserSettings {
+    fn merge(self, settings: &mut Settings) {
+        settings.game_dir = self.game_dir;
+        settings.ram = self.ram;
+        settings.optionals = self.optionals;
+        settings.properties = self.properties
+    }
 }
 
 async fn ready(handler: EventProxy) -> Result<ReadyResponse> {
@@ -148,7 +177,7 @@ async fn ready(handler: EventProxy) -> Result<ReadyResponse> {
             };
             let ready_response = ReadyResponse {
                 profiles,
-                settings: ready_settings,
+                settings: ready_settings.into(),
             };
             Ok(ready_response)
         }
@@ -303,11 +332,11 @@ async fn select_game_dir() -> Result<Settings> {
     }
 }
 
-async fn save_settings(settings: Settings) -> Result<Settings> {
-    settings.save()?;
+async fn save_settings(settings: UserSettings) -> Result<UserSettings> {
     let mut current_settings = SETTINGS.get().expect("Can't take settings").lock().await;
-    current_settings.update(&settings)?;
-    Ok(update_settings(&settings).await?)
+    settings.merge(&mut *current_settings);
+    current_settings.save()?;
+    Ok(update_settings(&current_settings).await?.into())
 }
 
 async fn update_settings(settings: &Settings) -> Result<Settings> {

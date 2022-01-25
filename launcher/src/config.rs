@@ -66,11 +66,6 @@ impl Settings {
         Ok(())
     }
 
-    pub fn update(&mut self, settings: &Self) -> Result<()> {
-        self.ram = settings.ram;
-        Ok(())
-    }
-
     pub fn get_optionals(&self, profile: &str) -> Vec<String> {
         self.optionals
             .get(profile)
